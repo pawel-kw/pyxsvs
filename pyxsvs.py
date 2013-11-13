@@ -43,9 +43,10 @@ from ConfigParser import RawConfigParser
 from os.path import isfile
 import os
 import numpy
+from numpy import pi,sin,arctan,sqrt,mgrid,where,shape
 import sys
 from time import time
-from scipy.stats import nbinom
+#from scipy.stats import nbinom
 from scipy.optimize import leastsq
 from scipy.special import gamma, gammaln
 import string
@@ -116,7 +117,7 @@ class pyxsvs(object):
         self.setParameters(**kwargs) # Overwrite parameters (if any are given)
         self.flatField = fabio.open(self.Parameters['flatFieldFile']).data # Load flat field
         self.mask = fabio.open(self.Parameters['maskFile']).data # Load mask
-        self.constructQVector(self)
+        self.constructQVector()
 
     def initParameters(self):
         r'''Acts on the :sefl.Parameters: dictionary. Sets initial parameter values.
@@ -158,15 +159,17 @@ class pyxsvs(object):
         self.Parameters['ceny'] = config.getint('Main','ceny')
         self.Parameters['pixSize'] = config.getfloat('Main','pix')
         self.Parameters['sdDist'] = config.getfloat('Main','sddist')
-        exposureList = sort(config.sections().remove('Main'))
+        secList = config.sections()
+        secList.remove('Main')
+        exposureList = numpy.sort(secList)
         self.Parameters['exposureList'] = exposureList
         for i in xrange(len(exposureList)):
             exposure = exposureList[i]
             currExpParams = {}
             currExpParams['dataSuf'] = config.get(exposure,'data suffix')
             currExpParams['dataPref'] = config.get(exposure,'data prefix')
-            currExpParams['n1'] = config.get(exposure,'first data file')
-            currExpParams['n2'] = config.get(exposure,'last data file')
+            currExpParams['n1'] = config.getint(exposure,'first data file')
+            currExpParams['n2'] = config.getint(exposure,'last data file')
             currExpParams['expTime'] = config.getfloat(exposure,'exp time')
             self.Parameters['exposureParams'][exposure] = currExpParams
             self.Results[exposure] = {} # Initialize Results container
@@ -189,10 +192,10 @@ class pyxsvs(object):
         q2 = self.Parameters['q2']
         qs = self.Parameters['qs']
         dq = self.Parameters['dq']
-        self.qVector = pylab.arange(q1,q2+qs,qs)
+        self.qVector = numpy.arange(q1,q2+qs,qs)
         self.qVecLen = len(self.qVector)
 
-    def histogramData(self,fileList,qRings,flatField,bins=arange(10)):
+    def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10)):
         '''Data reading and processing function. Here's where everything happens.
         '''
         startTime = time()
@@ -255,7 +258,7 @@ class pyxsvs(object):
         '''
 
         nq = len(qRings)
-        histBins = list(zeros(nq))
+        histBins = list(numpy.zeros(nq))
         res = numpy.zeros(shape(fabio.open(fileList[0]).data))
         for i in xrange(len(fileList)):
            fileName = fileList[i]
@@ -274,9 +277,9 @@ class pyxsvs(object):
             stddevCnt = numpy.std(data)
             estim = int(mCnt+stddevCnt)
             if estim > 10:
-                histBins[j] = arange(int(mCnt+stddevCnt))
+                histBins[j] = numpy.arange(int(mCnt+stddevCnt))
             else:
-                histBins[j] = arange(10)
+                histBins[j] = numpy.arange(10)
         return staticFile,histBins
             
     def calculateVisibility(self):
@@ -296,12 +299,12 @@ class pyxsvs(object):
             expTimeLabel = 't_exp = %.1e s' % expTime
             fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
             dim1,dim2 = shape(fabio.open(fileNames[0]).data) # Get the data dimensions
-            qArray = ones((dim2,dim1))
+            qArray = numpy.ones((dim2,dim1))
             wf = 4*pi/wavelength
             [X,Y] = mgrid[1-ceny:dim2+1-ceny,1-cenx:dim1+1-cenx]
             qArray = wf*sin(arctan(sqrt(X**2+Y**2)*pixSize/sdDist)/2)
             qArray *= mask # Apply mask
-            qRings = range(self.self.qVecLen) # Initiate q partition list
+            qRings = range(self.qVecLen) # Initiate q partition list
             qImg = numpy.ones((dim1,dim2)) # Image to show q partitions
             # Populate q partition list
             for j in xrange(self.qVecLen):

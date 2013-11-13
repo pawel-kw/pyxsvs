@@ -10,16 +10,18 @@ Requirements:
 -SAXS file (output of sumedft.py) must be present.
 """
 
-from pylab import *
-from inputparser import *
-from utils_xpcs import *
-from matplotlib.path import points_in_path as points_inside_poly
+from pylab import zeros,figure,show,title,shape,connect,draw,nonzero,close
+from ConfigParser import RawConfigParser
+from matplotlib.path import Path
+import pyxsvs
 import sys
 import numpy as n
+import fabio
 
 
 class Mask:
-    def __init__(self, data, auto_mask):
+    def __init__(self, data, auto_mask, savedir):
+        self.savedir = savedir
         self.fig = figure()
         title('Select ROI to mask. Press m to mask or w to save and exit ')
         self.ax = self.fig.add_subplot(111)
@@ -36,7 +38,7 @@ class Mask:
         self.xx = []
         self.yy = []
         self.ind = 0
-        self.img = self.ax.imshow(self.masked_data,vmax=n.max(data)-3,origin='lower',interpolation='nearest',animated=True)
+        self.img = self.ax.imshow(self.masked_data,origin='lower',interpolation='nearest',animated=True)
         self.lc,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
         self.lm,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
         self.ax.set_xlim(0,self.lx)
@@ -63,7 +65,7 @@ class Mask:
             self.xx[-1] = self.xx[0]
             self.yy[-1] = self.yy[0]
             self.xy[-1] = self.xy[0]
-            self.ind = nonzero(points_inside_poly(self.points,self.xy))
+            self.ind = Path(self.xy).contains_points(self.points)
             self.mask = self.mask.reshape(self.lx*self.ly,1)
             self.mask[self.ind] = 1
             self.mask = self.mask.reshape(self.lx,self.ly)
@@ -72,8 +74,10 @@ class Mask:
         draw()
         if self.key == 'w':
             # Inverting the mask
-            self.mask = (self.mask+1)%2
-            saveedf(savdir+'mask_'+sname+'.edf',self.mask)
+            #self.mask = (self.mask+1)%2
+            edfImg = fabio.edfimage.edfimage()
+            edfImg.data = self.mask
+            edfImg.write(self.savedir+'mask.edf')
             close()
 
     def on_move(self,event):
@@ -99,33 +103,11 @@ class Mask:
 
 
 
-# Read input parameters
-input_file = InputFile()
-try: datdir,prefd,sufd,nf1,nf2,darkdir,df1,df2,sname,cx,cy,dt,lambdaw,pix_size,distance,dqv,qv1,qv2,qvs,dis_lev,ttcf_par,savdir=input_file.old_read(sys.argv[1])
-except:
-    print "Problem reading %s" % sys.argv[1]
-    sys.exit()
-
-try:
-    saxs_file=getedffile(savdir+'saxs_'+sname+'.edf')
-    header=saxs_file.GetStaticHeader(0)
-except ValueError:
-    print 'There is no SAXS file or something is wrong with it!'
-    sys.exit()
-
-
-auto_maskf=getedffile('/home/kwasniew/Tools/Python/pyxpcs_branch/mask_medipix.edf')
-#auto_maskf=getedffile('/buffer/tinc1/PAWEL/pyxpcs_multi_series/mask_medipix.edf')
-auto_mask=auto_maskf.GetData(0)
-auto_mask[:,143] = 1
-init_mask = zeros(shape(auto_mask))
-if len(sys.argv)>2:
-    init_mask = getedffile(sys.argv[2])
-    init_mask = init_mask.GetData(0)
-    auto_mask[where(init_mask==0)]=1
-    #auto_mask = init_mask
-data=log10(saxs_file.GetData(0)+0.0001)
-
-mask = Mask(data,auto_mask)
-
-show()
+if __name__ == '__main__':
+    inputFile = sys.argv[1]
+    calculator = pyxsvs.pyxsvs(inputFile)
+    saveDir = calculator.Parameters['saveDir']
+    auto_mask = fabio.open('/home/kwasniew/Experiments/MAXIPIX/maxipix1_mask_2013.edf').data
+    staticImg = fabio.open(sys.argv[2]).data
+    mask = Mask(staticImg,auto_mask,saveDir)
+    show()
