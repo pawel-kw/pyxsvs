@@ -19,14 +19,14 @@ import numpy as n
 import fabio
 
 
-class Mask:
+class maskMaker:
     def __init__(self, data, auto_mask, savedir):
         self.savedir = savedir
         self.fig = figure()
         title('Select ROI to mask. Press m to mask or w to save and exit ')
         self.ax = self.fig.add_subplot(111)
         self.canvas = self.ax.figure.canvas
-        self.data = data
+        self.data = n.log10(data)
         self.lx, self.ly = shape(self.data)
         self.mask = auto_mask
         self.masked_data = n.ma.masked_array(self.data,self.mask)
@@ -109,5 +109,5 @@ if __name__ == '__main__':
     saveDir = calculator.Parameters['saveDir']
     auto_mask = fabio.open('/home/kwasniew/Experiments/MAXIPIX/maxipix1_mask_2013.edf').data
     staticImg = fabio.open(sys.argv[2]).data
-    mask = Mask(staticImg,auto_mask,saveDir)
+    mask = maskMaker(staticImg,auto_mask,saveDir)
     show()

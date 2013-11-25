@@ -43,7 +43,7 @@ from ConfigParser import RawConfigParser
 from os.path import isfile
 import os
 import numpy
-from numpy import pi,sin,arctan,sqrt,mgrid,where,shape
+from numpy import pi,sin,arctan,sqrt,mgrid,where,shape,exp,linspace,std
 import sys
 from time import time
 #from scipy.stats import nbinom
@@ -65,7 +65,7 @@ figParams = {
     'legend.numpoints': 1,
     'legend.handletextpad': 0.1,
     'font.family': 'serif',
-    'axes.formatter.limits': (-2,2),
+    'axes.formatter.limits': (-4,4),
     }
 pylab.rcParams.update(figParams)
 
@@ -97,14 +97,14 @@ class pyxsvs(object):
         config = RawConfigParser()
         self.Parameters = {}
         self.Results = {}
-        self.flatField = pylab.array([])
-        self.mask = pylab.array([])
+        self.flatField = numpy.array([])
+        self.mask = numpy.array([])
         self.initParameters() # initialize Parameters
-        self.qVevtor = pylab.array([])
+        self.qVevtor = numpy.array([])
         self.globalPDFArray = []
         self.qBins = []
         self.histStdDev = []
-        self.trace = pylab.array([])
+        self.trace = numpy.array([])
         
         # Read input file
         if type(inputFileName) == type(''):
@@ -155,8 +155,8 @@ class pyxsvs(object):
         self.Parameters['dq'] = config.getfloat('Main','dq')
         self.Parameters['outPrefix'] = config.get('Main','sample name')
         self.Parameters['wavelength'] = config.getfloat('Main','wavelength')
-        self.Parameters['cenx'] = config.getint('Main','cenx')
-        self.Parameters['ceny'] = config.getint('Main','ceny')
+        self.Parameters['cenx'] = config.getfloat('Main','cenx')
+        self.Parameters['ceny'] = config.getfloat('Main','ceny')
         self.Parameters['pixSize'] = config.getfloat('Main','pix')
         self.Parameters['sdDist'] = config.getfloat('Main','sddist')
         secList = config.sections()
@@ -202,22 +202,22 @@ class pyxsvs(object):
         # Iterate over files
         n = len(fileList)
         nq = len(qRings)
-        trace = zeros((nq,n))
-        qHist = list(zeros(nq))
-        qBins = list(zeros(nq))
+        trace = numpy.zeros((nq,n))
+        qHist = list(numpy.zeros(nq))
+        qBins = list(numpy.zeros(nq))
         for i in xrange(n):
             swrite('\r'+str(int(i*100./n))+'%')
             sflush()
             dataFile = fabio.open(fileList[i])
             try:
-                rawData = dataFile.GetData(0)
+                rawData = dataFile.data
             except ValueError:
                 print 'Problems reading file %s' % fileList[i]
                 sys.exit()
             if i == 0:
                 # Initiate global histogram
-                globalPDFArray = list(zeros(nq))
-                sqrGlobalPDFArray = list(zeros(nq))
+                globalPDFArray = list(numpy.zeros(nq))
+                sqrGlobalPDFArray = list(numpy.zeros(nq))
             #rawData /= flatField 
             #rawData = numpy.around(rawData,0)
             # For each file iterate over q rings
@@ -286,10 +286,20 @@ class pyxsvs(object):
         r'''Function calculating visibility for each of the exposures
         listed in the input file.
         '''
-        exposureList = self.Parameters('exposureList')
+        exposureList = self.Parameters['exposureList']
         for i in xrange(len(exposureList)):
             exposure = exposureList[i]
             currExpResult = {}
+            # Unpack useful variables
+            dataDir = self.Parameters['dataDir']
+            saveDir = self.Parameters['saveDir']
+            outPrefix = self.Parameters['outPrefix']
+            wavelength = self.Parameters['wavelength']
+            cenx = self.Parameters['cenx']
+            ceny = self.Parameters['ceny']
+            pixSize = self.Parameters['pixSize']
+            sdDist = self.Parameters['sdDist']
+            dq = self.Parameters['dq']
             currExpParams = self.Parameters['exposureParams'][exposure]
             dataSuf = currExpParams['dataSuf']
             dataPref = currExpParams['dataPref']
@@ -303,37 +313,41 @@ class pyxsvs(object):
             wf = 4*pi/wavelength
             [X,Y] = mgrid[1-ceny:dim2+1-ceny,1-cenx:dim1+1-cenx]
             qArray = wf*sin(arctan(sqrt(X**2+Y**2)*pixSize/sdDist)/2)
-            qArray *= mask # Apply mask
+            qArray *= (self.mask+1)%2 # Apply mask
             qRings = range(self.qVecLen) # Initiate q partition list
             qImg = numpy.ones((dim1,dim2)) # Image to show q partitions
             # Populate q partition list
             for j in xrange(self.qVecLen):
-                qRings[j] = where((qArray >= qVector[j] - dq)&(qArray <= qVector[j] + dq))
+                qRings[j] = where((qArray >= self.qVector[j] - dq)&(qArray <= self.qVector[j] + dq))
                 qImg[qRings[j]] = 0
             # Create static and bins
-            # For the moment, the fast static is created from first 200 files.
-            # This should be changed into something smarter.
-            fastStatic,histBins = self.createFastStatic(fileNames[:200],qRings)
-            qImg = numpy.ma.masked_array(numpy.ones((dim1,dim2)),qImg) # Masked array for plotting
-            figQ = figure()
+            if len(fileNames) > 200:
+                fastStatic,histBins = self.createFastStatic(fileNames[:200],qRings)
+            else:
+                fastStatic,histBins = self.createFastStatic(fileNames,qRings)
+            qImg = numpy.ma.masked_array(numpy.ones((dim1,dim2)),qImg) # Masked numpy.array for plotting
+            figQ = pylab.figure()
             ax1 = figQ.add_subplot(111)
-            ax1.pcolormesh(X,Y,fastStatic*mask)
+            staticImg = numpy.ma.masked_array(fastStatic,mask=self.mask)
+            ax1.pcolormesh(X,Y,staticImg)
             ax1.set_aspect(1)
-            ax1.pcolormesh(X,Y,qImg,alpha=0.5,cmap=cm.gray)
-            savefig(saveDir+outPrefix+dataPref+exposure+'_q_mask.png',dpi=200)
+            ax1.pcolormesh(X,Y,qImg,alpha=0.5,cmap=pylab.cm.gray)
+            ax1.set_xlim(numpy.min(X),numpy.max(X))
+            ax1.set_ylim(numpy.min(Y),numpy.max(Y))
+            pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_q_mask.png',dpi=200)
             ###################
             # Start analysis! #
             ###################
             print 'Histograming %s' % exposure
-            xsvsRes,hbins,histStddev,trace = self.histogramData(fileNames,qRings,flatField,bins=histBins)
+            xsvsRes,hbins,histStddev,trace = self.histogramData(fileNames,qRings,self.flatField,bins=histBins)
             print 'Done for %s, now plotting and fitting...' % exposure
             # Plot the trace for each q
-            figTrace = figure(figsize=(8,7)) # Trace plots
-            subplots_adjust(bottom=0.1,top=0.85,wspace=0.4)
+            figTrace = pylab.figure(figsize=(8,7)) # Trace plots
+            pylab.subplots_adjust(bottom=0.1,top=0.85,wspace=0.4)
             figTrace.suptitle(expTimeLabel,fontsize=12)
             # Plot the histogram for each q
-            figHist = figure(figsize=(8,11)) # Histogram plots
-            subplots_adjust(bottom=0.1,top=0.9)
+            figHist = pylab.figure(figsize=(8,11)) # Histogram plots
+            pylab.subplots_adjust(bottom=0.1,top=0.9)
             figHist.suptitle(expTimeLabel,fontsize=14)
             nCols = 2
             rest = self.qVecLen % nCols
@@ -341,22 +355,22 @@ class pyxsvs(object):
                 nRows = self.qVecLen/nCols + 1
             else:
                 nRows = self.qVecLen/nCols
-            beta = zeros((self.qVecLen,2))
-            MArray = zeros((self.qVecLen,2)) # Number of modes
-            KArray = zeros((self.qVecLen,2)) # Mean number of counts
-            RArray = zeros((self.qVecLen,2)) # Low-count estimate of 1/M
+            beta = numpy.zeros((self.qVecLen,2))
+            MArray = numpy.zeros((self.qVecLen,2)) # Number of modes
+            KArray = numpy.zeros((self.qVecLen,2)) # Mean number of counts
+            RArray = numpy.zeros((self.qVecLen,2)) # Low-count estimate of 1/M
             for j in xrange(self.qVecLen):
                 qKey = 'q%03i' % j
                 ax2 = figHist.add_subplot(nRows,nCols,j+1)
                 axTrace = figTrace.add_subplot(nRows,nCols,j+1)
                 axTrace.plot(trace[j,:])
-                initKValue = mean(trace[j,:]) # inital guess for K
-                axTrace.set_title('%.2e A^-1'%qVector[j],fontsize=10)
+                initKValue = numpy.mean(trace[j,:]) # inital guess for K
+                axTrace.set_title('%.2e A^-1' % self.qVector[j],fontsize=10)
                 # Fit a negative binomial distribution pmf to the histograms for each q
                 xdata = hbins[j][:-1]
                 ydata = xsvsRes[j]
                 yerr = histStddev[j]
-                logErr = yerr/(ydata*log(10))
+                numpy.logErr = yerr/(ydata*numpy.log(10))
                 x = linspace(xdata[0],xdata[-1])
                 initParams = [5.0] # [M] - try fit with fixed K
                 initEval = peval(x,[5.0,initKValue]) # Evaluate model for initial parameters
@@ -364,12 +378,12 @@ class pyxsvs(object):
                 # Set a roi for the fitting range
                 roi = where(ydata>1e-5)
                 if len(roi[0]) > len(ydata)-2:
-                    roi = (array(roi[0][:-2]),)
+                    roi = (numpy.array(roi[0][:-2]),)
                 #######
                 # Fit #
                 #######
                 #plsq = leastsq(residuals,initParams,\
-                #    args=(log10(ydata[roi]),xdata[roi],logErr[roi]),\
+                #    args=(numpy.log10(ydata[roi]),xdata[roi],numpy.logErr[roi]),\
                 #    full_output=1)
                 #s_sq = (plsq[2]['fvec']**2).sum()/\
                 #   (len(ydata[roi])-len(initParams))
@@ -383,7 +397,7 @@ class pyxsvs(object):
                 # Alternative fit with fixed K #
                 ################################
                 plsq = leastsq(residuals2,initParams,\
-                    args=(log10(ydata[roi]),xdata[roi],logErr[roi],initKValue),\
+                    args=(numpy.log10(ydata[roi]),xdata[roi],numpy.logErr[roi],initKValue),\
                     full_output=1)
                 s_sq = (plsq[2]['fvec']**2).sum()/\
                    (len(ydata[roi])-len(initParams))
@@ -400,7 +414,7 @@ class pyxsvs(object):
                 ax2.text(0.75,0.7,resText,transform=ax2.transAxes,fontsize=10)
                 fitEval = peval(x,[M,K])
                 pEval = poisson(x,K)
-                qLabel = '%.2e A^-1' % qVector[j]
+                qLabel = '%.2e A^-1' % self.qVector[j]
                 ax2.set_title(qLabel)
                 #GammaEval = gammaDist(x,[M,K])
                 ax2.errorbar(xdata[roi],ydata[roi],yerr[roi],\
@@ -413,6 +427,7 @@ class pyxsvs(object):
                 #ax2.plot(x,GammaEval,'--m',label='Gamma') # plot Gamma distribution
                 ax2.set_yscale('log')
                 #ax2.set_ylim(min(where(ydata>0)[0]),max(ydata))
+                ax2.set_xlim(xdata[0],xdata[-1])
                 ax2.set_ylim(1e-10,1)
                 beta[j,0] = 1./MArray[j,0]
                 beta[j,1] = MArray[j,1]/MArray[j,0]**2
@@ -436,32 +451,32 @@ class pyxsvs(object):
                 currResults[qKey]['R-1'] = \
                         {'value': RArray[j,0], 'stddev': RArray[j,1]}
                 self.Results[exposure]['data'] = currResults
-            figure(figHist.number)
-            savefig(saveDir+outPrefix+dataPref+exposure+'_hist_fits.png',dpi=200)
-            figure(figTrace.number)
-            savefig(saveDir+outPrefix+dataPref+exposure+'_trace.png',dpi=200)
+            pylab.figure(figHist.number)
+            pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_hist_fits.png',dpi=200)
+            pylab.figure(figTrace.number)
+            pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_trace.png',dpi=200)
             # Plot fit results
-            figRes = figure(figsize=(6,4)) # Figure for fit results
+            figRes = pylab.figure(figsize=(6,4)) # Figure for fit results
             figRes.suptitle(expTimeLabel,fontsize=12)
-            subplots_adjust(bottom=0.2,right=0.9,top=0.9)
+            pylab.subplots_adjust(bottom=0.2,right=0.9,top=0.9)
             axB = figRes.add_subplot(111)
             #axB.set_title(outPrefix+' '+dataPref)
             axE = axB.twinx()
-            axB.errorbar(qVector,beta[:,0],beta[:,1],\
+            axB.errorbar(self.qVector,beta[:,0],beta[:,1],\
                 fmt='-bo',ms=4,label='contrast')
-            axB.plot(qVector,RArray[:,0],\
-                '-o',mfc='none',label='R-1')
+            #axB.plot(self.qVector,RArray[:,0],\
+            #    '-o',mfc='none',label='R-1')
             axB.set_xlabel('q [A^-1]')
             axB.set_ylabel('contrast')
             axB.legend(loc=2)
-            axE.errorbar(qVector,MArray[:,0],MArray[:,1],\
+            axE.errorbar(self.qVector,MArray[:,0],MArray[:,1],\
                 fmt='-r^',ms=4,label='M')
-            axE.errorbar(qVector,KArray[:,0],KArray[:,1],\
+            axE.errorbar(self.qVector,KArray[:,0],KArray[:,1],\
                 fmt='-gs',ms=4,label='K')
             axE.set_ylabel('M, K')
             axE.legend(loc=1)
-            savefig(saveDir+outPrefix+dataPref+exposure+'_fit_params.png',dpi=200)
-            pickle.dump(self.Results, open(saveDir+outPrefix+dataPref+exposure+'_results.p', "wb"))
+            pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_fit_params.png',dpi=200)
+        pickle.dump(self.Results, open(saveDir+outPrefix+dataPref+'results.p', "wb"))
 
 ###############################
 # Helper function definitions #
@@ -492,7 +507,7 @@ def gammaDist(x,params):
     '''Gamma distribution function
     '''
     M,K = params
-    coeff = exp(M*log(M) + (M-1)*log(x) - gammaln(M) - M*log(K))
+    coeff = exp(M*numpy.log(M) + (M-1)*numpy.log(x) - gammaln(M) - M*numpy.log(K))
     Gd = coeff*exp(-M*x/K)
     return Gd
 
@@ -507,7 +522,7 @@ def residuals(params,y,x,yerr):
     '''
     M,K = params
     pr = M/(K+M)
-    result = (y - log10(nbinomPMF(x,K,M)))/yerr
+    result = (y - numpy.log10(nbinomPMF(x,K,M)))/yerr
     return result
 
 def residuals2(params,y,x,yerr,K):  
@@ -516,7 +531,7 @@ def residuals2(params,y,x,yerr,K):
     '''
     M = params
     pr = M/(K+M)
-    result = (y - log10(nbinomPMF(x,K,M)))/yerr
+    result = (y - numpy.log10(nbinomPMF(x,K,M)))/yerr
     return result
 
 def peval(x,params):
