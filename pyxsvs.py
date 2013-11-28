@@ -51,6 +51,7 @@ from scipy.optimize import leastsq
 from scipy.special import gamma, gammaln
 import string
 import pickle
+from matplotlib.path import Path
 #import lmfit # not used for the moment
 
 # Figure settings
@@ -99,6 +100,7 @@ class pyxsvs(object):
         self.Results = {}
         self.flatField = numpy.array([])
         self.mask = numpy.array([])
+        self.static = numpy.array([])
         self.initParameters() # initialize Parameters
         self.qVevtor = numpy.array([])
         self.globalPDFArray = []
@@ -113,11 +115,27 @@ class pyxsvs(object):
             except:
                 print 'Problems reading %s' % inputFileName
                 sys.exit()
-        self.parseInput(config) # Parse the input file
+        self.config = config
+        self.parseInput(self.config) # Parse the input file
         self.setParameters(**kwargs) # Overwrite parameters (if any are given)
         self.flatField = fabio.open(self.Parameters['flatFieldFile']).data # Load flat field
-        self.mask = fabio.open(self.Parameters['maskFile']).data # Load mask
         self.constructQVector()
+        # Create static
+        currExpParams = self.Parameters['exposureParams'][self.Parameters['exposureList'][0]]
+        dataDir = self.Parameters['dataDir']
+        dataSuf = currExpParams['dataSuf']
+        n1 = currExpParams['n1']
+        n2 = currExpParams['n2']
+        dataPref = currExpParams['dataPref']
+        fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
+        if len(fileNames) > 200:
+            self.static = self.createFastStatic(fileNames[:200])
+        else:
+            self.static = self.createFastStatic(fileNames)
+        try:
+            self.mask = fabio.open(self.Parameters['maskFile']).data # Load mask
+        except:
+            print 'Mask not set, please create one before trying to calculate anything!'
 
     def initParameters(self):
         r'''Acts on the :sefl.Parameters: dictionary. Sets initial parameter values.
@@ -126,7 +144,9 @@ class pyxsvs(object):
                 'saveDir' : '',
                 'dataDir' : '',
                 'flatFieldFile' : '',
+                'useFlatField' : False,
                 'maskFile' : '',
+                'defaultMaskFile' : '',
                 'q1' : 0.0,
                 'q2' : 0.0,
                 'qs' : 0.0,
@@ -148,7 +168,11 @@ class pyxsvs(object):
         self.Parameters['saveDir'] = config.get('Main','save dir')
         self.Parameters['dataDir'] = config.get('Main','data dir')
         self.Parameters['flatFieldFile'] = config.get('Main','flat field')
-        self.Parameters['maskFile'] = config.get('Main','mask')
+        try:
+            self.Parameters['maskFile'] = config.get('Main','mask')
+        except:
+            print 'Mask not set in the config file'
+        self.Parameters['defaultMaskFile'] = config.get('Main','default mask')
         self.Parameters['q1'] = config.getfloat('Main','q1')
         self.Parameters['q2'] = config.getfloat('Main','q2')
         self.Parameters['qs'] = config.getfloat('Main','qs')
@@ -197,6 +221,37 @@ class pyxsvs(object):
 
     def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10)):
         '''Data reading and processing function. Here's where everything happens.
+        By default the data files are histogrammed only after applying the mask.
+        When the *useFlatField* parameter is set to *True*, each data file is divided 
+        by the flat field and rounded to integers before histogramming.
+
+        *Accepted input:*
+
+        *fileList*: list
+            List of data files (full path) to process
+
+        *qRings*: list of pixel indices
+            A list containing n lists of pixel indices, corresponding to the chosen q rings
+
+        *flatField*: array
+            Flat field to be used to correct each data file
+
+        *bins*: list
+            List of bins for the histogram
+
+        *Returns:*
+        
+        *(globalPDFArray,qBins,histStddev,trace)*: tupile
+            Results of histogramming:
+            
+            *globalPDFArray*: list of histograms for each q ring
+
+            *qBins*: list of histogram bins for each q ring
+
+            *histStddev*: list of standard deviation from the mean (error bars for the histograms)
+                for each q ring
+
+            *trace*: list of averaged intensities for each q ring
         '''
         startTime = time()
         # Iterate over files
@@ -218,8 +273,9 @@ class pyxsvs(object):
                 # Initiate global histogram
                 globalPDFArray = list(numpy.zeros(nq))
                 sqrGlobalPDFArray = list(numpy.zeros(nq))
-            #rawData /= flatField 
-            #rawData = numpy.around(rawData,0)
+            if self.Parameters['useFlatField']:
+                rawData /= flatField 
+                rawData = numpy.around(rawData,0) 
             # For each file iterate over q rings
             for j in xrange(nq):
                 data = rawData[qRings[j]]
@@ -238,8 +294,7 @@ class pyxsvs(object):
         print '\nCalculations took %.2f s' % (endTime-startTime)
         return globalPDFArray,qBins,histStddev,trace
     
-    def createFastStatic(self,fileList,qRings):
-       
+    def createFastStatic(self,fileList,qRings=0):
         r'''Function creating an averaged 2D SAXS image from data files
         provided in :fileList: and producing bins for photon counting
         histograms based on the numbers of photons found in the averaged image.
@@ -257,8 +312,6 @@ class pyxsvs(object):
         :py:attr: histBins: list of histogram bins for all q partitions.
         '''
 
-        nq = len(qRings)
-        histBins = list(numpy.zeros(nq))
         res = numpy.zeros(shape(fabio.open(fileList[0]).data))
         for i in xrange(len(fileList)):
            fileName = fileList[i]
@@ -271,17 +324,28 @@ class pyxsvs(object):
            res += data
            del data
         staticFile = res/len(fileList)
-        for j in xrange(nq):
-            data = staticFile[qRings[j]]
-            mCnt = numpy.mean(data)
-            stddevCnt = numpy.std(data)
-            estim = int(mCnt+stddevCnt)
-            if estim > 10:
-                histBins[j] = numpy.arange(int(mCnt+stddevCnt))
-            else:
-                histBins[j] = numpy.arange(10)
-        return staticFile,histBins
+        if qRings != 0:
+            nq = len(qRings)
+            histBins = list(numpy.zeros(nq))
+            for j in xrange(nq):
+                data = staticFile[qRings[j]]
+                mCnt = numpy.mean(data)
+                stddevCnt = numpy.std(data)
+                estim = int(mCnt+stddevCnt)
+                if estim > 10:
+                    histBins[j] = numpy.arange(int(mCnt+stddevCnt))
+                else:
+                    histBins[j] = numpy.arange(10)
+            return staticFile,histBins
+        else:
+            return staticFile
             
+    def createMask(self):
+        autoMask = fabio.open(self.Parameters['defaultMaskFile']).data
+        saveDir = self.Parameters['saveDir']
+        self.mask = maskMaker(self.static,autoMask,saveDir).mask
+        pylab.show()
+
     def calculateVisibility(self):
         r'''Function calculating visibility for each of the exposures
         listed in the input file.
@@ -320,7 +384,7 @@ class pyxsvs(object):
             for j in xrange(self.qVecLen):
                 qRings[j] = where((qArray >= self.qVector[j] - dq)&(qArray <= self.qVector[j] + dq))
                 qImg[qRings[j]] = 0
-            # Create static and bins
+            # Get static and bins
             if len(fileNames) > 200:
                 fastStatic,histBins = self.createFastStatic(fileNames[:200],qRings)
             else:
@@ -478,6 +542,101 @@ class pyxsvs(object):
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_fit_params.png',dpi=200)
         pickle.dump(self.Results, open(saveDir+outPrefix+dataPref+'results.p', "wb"))
 
+class maskMaker:
+    '''Interactive mask drawing tool based entirely on matplotlib (not that
+    it's a good thinkg...)
+    '''
+    def __init__(self, data, auto_mask, savedir):
+        self.savedir = savedir
+        self.fig = pylab.figure()
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_title('Select ROI to mask. Press \'m\' to mask, \'u\' to unmask or \'w\' to save and exit ')
+        self.canvas = self.ax.figure.canvas
+        #self.data = n.log10(data)
+        self.data = data
+        self.lx, self.ly = shape(self.data)
+        self.mask = auto_mask
+        self.masked_data = numpy.ma.masked_array(self.data,self.mask)
+        self.points = []
+        self.key = []
+        self.x = 0
+        self.y = 0
+        self.xy = []
+        self.xx = []
+        self.yy = []
+        self.ind = 0
+        self.img = self.ax.imshow(self.masked_data,origin='lower',interpolation='nearest',animated=True)
+        self.lc,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
+        self.lm,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
+        self.ax.set_xlim(0,self.lx)
+        self.ax.set_ylim(0,self.ly)
+        for i in range(self.lx):
+            for j in range(self.ly):
+                self.points.append([i,j])
+
+        cidb = pylab.connect('button_press_event', self.on_click)
+        cidk = pylab.connect('key_press_event',self.on_click)
+        cidm = pylab.connect('motion_notify_event',self.on_move)
+
+    def on_click(self,event):
+        if not event.inaxes:
+            self.xy = []
+            return
+        self.x, self.y = int(event.xdata), int(event.ydata)
+        self.key = event.key
+        self.xx.append([self.x])
+        self.yy.append([self.y])
+        self.xy.append([self.y,self.x])
+        self.lc.set_data(self.xx,self.yy)
+        if self.key == 'm':
+            self.xx[-1] = self.xx[0]
+            self.yy[-1] = self.yy[0]
+            self.xy[-1] = self.xy[0]
+            self.ind = Path(self.xy).contains_points(self.points)
+            self.mask = self.mask.reshape(self.lx*self.ly,1)
+            self.mask[self.ind] = 1
+            self.mask = self.mask.reshape(self.lx,self.ly)
+            self.update_img()
+            self.reset_poly()
+        if self.key == 'u':
+            self.xx[-1] = self.xx[0]
+            self.yy[-1] = self.yy[0]
+            self.xy[-1] = self.xy[0]
+            self.ind = Path(self.xy).contains_points(self.points)
+            self.mask = self.mask.reshape(self.lx*self.ly,1)
+            self.mask[self.ind] = 0
+            self.mask = self.mask.reshape(self.lx,self.ly)
+            self.update_img()
+            self.reset_poly()
+        draw()
+        if self.key == 'w':
+            edfImg = fabio.edfimage.edfimage()
+            edfImg.data = self.mask
+            edfImg.write(self.savedir+'mask.edf')
+            print 'Mask saved to %s' % (self.savedir+'mask.edf')
+            self.fig.close()
+
+    def on_move(self,event):
+        if not event.inaxes: return
+        self.xm, self.ym = int(event.xdata), int(event.ydata)
+        if self.x != 0:
+            self.lm.set_data((self.x,self.xm),(self.y,self.ym))
+            draw()
+
+    def update_img(self):
+        self.img.set_data(n.ma.masked_array(self.data,self.mask))
+        draw()
+
+    def reset_poly(self):
+        self.xx = []
+        self.yy = []
+        self.xy = []
+        self.lc.set_data(self.xx,self.yy)
+        self.lm.set_data(self.xx,self.yy)
+        draw()
+        self.x = 0
+        self.y = 0
+
 ###############################
 # Helper function definitions #
 ###############################
@@ -495,7 +654,7 @@ def filename(pref,suf,firstf,lastf):
     return fname 
 
 def nbinomPMF(x,K,M):
-    '''Binomial (Poisson-Gamma) distribution function.
+    '''Negative Binomial (Poisson-Gamma) distribution function.
     '''
     coeff = exp(gammaln(x+M)-gammaln(x+1)-gammaln(M))
     Pk = coeff*numpy.power(M/(K+M),M)
