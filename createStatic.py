@@ -12,7 +12,7 @@ inputFile = sys.argv[1]
 calculator = pyxsvs.pyxsvs(inputFile)
 exposure = calculator.Parameters['exposureList'][0]
 expParams = calculator.Parameters['exposureParams'][exposure]
-maskFile = calculator.Parameters['maskFile']
+maskFile = calculator.Parameters['defaultMaskFile']
 mask = fabio.open(maskFile).data
 flatFieldFile = calculator.Parameters['flatFieldFile']
 flatField = fabio.open(flatFieldFile).data
@@ -22,7 +22,7 @@ dataDir = calculator.Parameters['dataDir']
 dataSuf = expParams['dataSuf']
 dataPref = expParams['dataPref']
 n1 = expParams['n1']
-n2 = 6300#expParams['n2']
+n2 = expParams['n2']
 q1 = calculator.Parameters['q1']
 q2 = calculator.Parameters['q2']
 qs = calculator.Parameters['qs']
@@ -50,13 +50,16 @@ qImg = numpy.ma.masked_array(numpy.ones((dim1,dim2)),qImg)
 # Save the averaged static as edf file
 edfimg = fabio.edfimage.edfimage()
 edfimg.data = fastStatic
-edfimg.write(saveDir+outPrefix+'_2Dstatic.edf')
+saveFileName = saveDir+outPrefix+'2Dstatic.edf'
+edfimg.write(saveFileName)
+print 'Static file saved to %s' % saveFileName
 
 # Plot the 2D averaged static + q partitions
 #fastStatic = numpy.ma.masked_array(fastStatic,mask=defaultMask)
 fastStaticMasked = numpy.ma.masked_array(fastStatic,mask=mask)
 fig = pylab.figure()
 ax = fig.add_subplot(111)
+ax.set_title('Static + q partitions')
 plt = ax.pcolormesh(numpy.log10(fastStaticMasked))
 ax.pcolormesh(qImg,alpha=0.1,cmap=pylab.cm.gray)
 #ax.set_xlim(numpy.min(X),numpy.max(X))
@@ -77,6 +80,7 @@ staticAzim2d,q,chi = integrator.integrate2d(data=fastStatic/flatField,\
 q /= 10 # to 1/A
 fig_azim = pylab.figure()
 ax_azim = fig_azim.add_subplot(111)
+ax_azim.set_title('Azimuthally regrouped static')
 pltA = ax_azim.pcolormesh(q,chi,numpy.log10(staticAzim2d+1))
 pylab.colorbar(pltA)
 ax_azim.set_xlim(numpy.min(q),numpy.max(q))
@@ -87,8 +91,9 @@ q,staticAzim1d = integrator.integrate1d(data=fastStatic/flatField,\
         nbPt=2000,unit='q_nm^-1',mask=mask)
 q /= 10 # to 1/A
 fig1d = pylab.figure()
-roi = where(staticAzim1d>1)
+roi = where(staticAzim1d>0)
 ax1d = fig1d.add_subplot(111)
+ax1d.set_title('Averaged SAXS + q partitions')
 ax1d.semilogy(q[roi],staticAzim1d[roi])
 ax1d.set_xlim(numpy.min(q[roi]),numpy.max(q[roi]))
 
