@@ -21,13 +21,16 @@ import fabio
 
 class maskMaker:
     def __init__(self, data, auto_mask, savedir):
+        self.mask_saved = False
         self.savedir = savedir
         self.fig = figure()
         title('Select ROI to mask. Press m to mask or w to save and exit ')
         self.ax = self.fig.add_subplot(111)
         self.canvas = self.ax.figure.canvas
-        self.data = n.log10(data)
+        #self.data = n.log10(data)
+        self.data = data
         self.lx, self.ly = shape(self.data)
+        self.auto_mask = auto_mask
         self.mask = auto_mask
         self.masked_data = n.ma.masked_array(self.data,self.mask)
         self.points = []
@@ -72,12 +75,25 @@ class maskMaker:
             self.update_img()
             self.reset_poly()
         draw()
+        if self.key == 'u':
+            self.xx[-1] = self.xx[0]
+            self.yy[-1] = self.yy[0]
+            self.xy[-1] = self.xy[0]
+            self.ind = Path(self.xy).contains_points(self.points)
+            self.mask = self.mask.reshape(self.lx*self.ly,1)
+            self.mask[self.ind] = 0
+            self.mask = self.mask.reshape(self.lx,self.ly)
+            self.update_img()
+            self.reset_poly()
+        draw()
         if self.key == 'w':
             # Inverting the mask
             #self.mask = (self.mask+1)%2
             edfImg = fabio.edfimage.edfimage()
             edfImg.data = self.mask
             edfImg.write(self.savedir+'mask.edf')
+            print 'Mask saved to %s' % (self.savedir+'mask.edf')
+            self.mask_saved = True
             close()
 
     def on_move(self,event):
@@ -107,7 +123,14 @@ if __name__ == '__main__':
     inputFile = sys.argv[1]
     calculator = pyxsvs.pyxsvs(inputFile)
     saveDir = calculator.Parameters['saveDir']
-    auto_mask = fabio.open('/home/kwasniew/Experiments/MAXIPIX/maxipix1_mask_2013.edf').data
+    defaultMaskFile = calculator.Parameters['defaultMaskFile']
+    auto_mask = fabio.open(defaultMaskFile).data
     staticImg = fabio.open(sys.argv[2]).data
-    mask = maskMaker(staticImg,auto_mask,saveDir)
+    masker = maskMaker(staticImg,auto_mask,saveDir)
     show()
+    if masker.mask_saved:
+        print 'Adding mask to input file'
+        calculator.config.set('Main','mask',value = saveDir+'mask.edf')
+        f = open(inputFile,'w')
+        calculator.config.write(f)
+        f.close()
