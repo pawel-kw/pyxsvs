@@ -13,4 +13,4 @@ Required packages
  * [fabio](http://sourceforge.net/apps/trac/fable/wiki/fabio) - for reading detector 
     data files in different formats.
  * [lmfit](http://cars9.uchicago.edu/software/python/lmfit/) - flexible and easy 
-    to use non-linear least square fitting utilities.
+    to use non-linear least square fitting utilities. Not really used at the moment...
