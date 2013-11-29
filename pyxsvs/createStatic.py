@@ -1,3 +1,13 @@
+#! /usr/bin/env python2
+
+'''A rather primitive script calculating the average of XSVS scattering
+patterns.  By default the average is calculated over 200 files from the last
+exposure set defined in the input file (I assume here that the last exposure is
+the longest one, so the calculated static will be nice and smooth). Optionally,
+a greater number of files may be used by passing the ``-n`` argument to the
+script.  
+'''
+
 import pyxsvs
 import sys
 import fabio
@@ -5,12 +15,21 @@ import pylab
 import numpy
 import pyFAI
 from numpy import pi,sin,arctan,sqrt,mgrid,where
+import argparse # parsing command line arguments
 
-defaultMask = fabio.open('/home/kwasniew/Experiments/MAXIPIX/maxipix1_mask_2013.edf').data
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('-i','--input',dest='inputFileName', metavar='./input.txt', type=str,
+                           help='Input file describing the data.',required=True)
+parser.add_argument('-n','--number',dest='fileNo', metavar='N', type=int, default=200,
+                           help='Number of files to average. Default is 200.')
+args = parser.parse_args()
 
-inputFile = sys.argv[1]
+# Parse the input file
+inputFile = args.inputFileName[0]
+fileNo = args.fileNo
 calculator = pyxsvs.pyxsvs(inputFile)
-exposure = calculator.Parameters['exposureList'][0]
+defaultMask = fabio.open(calculator.Parameters['defaultMaskFile']).data
+exposure = calculator.Parameters['exposureList'][-1]
 expParams = calculator.Parameters['exposureParams'][exposure]
 maskFile = calculator.Parameters['defaultMaskFile']
 mask = fabio.open(maskFile).data
@@ -32,7 +51,8 @@ cenx = calculator.Parameters['cenx']
 ceny = calculator.Parameters['ceny']
 pixSize = calculator.Parameters['pixSize']
 sdDist = calculator.Parameters['sdDist']
-fileNames = pyxsvs.filename(dataDir+dataPref,dataSuf,n1,n2)
+
+fileNames = pyxsvs.filename(dataDir+dataPref,dataSuf,n1,n1+fileNo)
 dim1,dim2 = numpy.shape(fabio.open(fileNames[0]).data) # Get the data dimensions
 qArray = numpy.ones((dim2,dim1))
 wf = 4*pi/wavelength
@@ -40,6 +60,7 @@ wf = 4*pi/wavelength
 qArray = wf*sin(arctan(sqrt(X**2+Y**2)*pixSize/sdDist)/2)
 qRings = range(calculator.qVecLen) # Initiate q partition list
 qImg = numpy.ones((dim1,dim2)) # Image to show q partitions
+
 # Populate q partition list
 for j in xrange(calculator.qVecLen):
     qRings[j] = where((qArray >= calculator.qVector[j] - dq)&(qArray <= calculator.qVector[j] + dq))
@@ -71,7 +92,6 @@ pylab.colorbar(plt)
 
 # Azimuthally regoup the static image and plot together with q partitions
 qv = numpy.arange(q1,q2+qs,qs)
-
 poni1 = ceny*pixSize*1e-3
 poni2 = cenx*pixSize*1e-3
 integrator = pyFAI.azimuthalIntegrator.AzimuthalIntegrator(poni1=poni1,poni2=poni2,dist=sdDist*1e-3,wavelength=wavelength*1e-10,pixel1=pixSize*1e-3,pixel2=pixSize*1e-3)
