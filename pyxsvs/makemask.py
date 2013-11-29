@@ -170,8 +170,7 @@ class maskMaker:
         self.y = 0
 
 
-
-if __name__ == '__main__':
+def main():
     module_desc = '''A simple GUI tool to create a mask for XSVS data analysis.
                    Requires an input file with information about the data set and 
                    a static file, created with the createStatic.py script.'''
@@ -182,8 +181,8 @@ if __name__ == '__main__':
                                help='Static file',required=True)
     args = parser.parse_args()
 
-    inputFile = args.inputFileName[0]
-    staticFile = args.staticFileName[0]
+    inputFile = args.inputFileName
+    staticFile = args.staticFileName
     calculator = pyxsvs.pyxsvs(inputFile)
     saveDir = calculator.Parameters['saveDir']
     defaultMaskFile = calculator.Parameters['defaultMaskFile']
@@ -197,3 +196,6 @@ if __name__ == '__main__':
         f = open(inputFile,'w')
         calculator.config.write(f)
         f.close()
+
+if __name__ == '__main__':
+    main()

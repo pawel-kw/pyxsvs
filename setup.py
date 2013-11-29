@@ -1,4 +1,5 @@
 from distutils.core import setup
+from setuptools import setup
 # Work around mbcs bug in distutils.
 # http://bugs.python.org/issue10945
 import codecs
@@ -10,10 +11,21 @@ except LookupError:
     codecs.register(func) 
 
 setup(name='pyxsvs',
-      version='0.1',
-      description='Python X-ray Speckle Visibility analysis tools',
-      author='Pawel Kwasniewski',
-      author_email='pawel.kw@gmail.com',
-      url='https://github.com/pawel-kw/pyxsvs',
-      py_modules=['pyxsvs','pyxsvs.makemask','pyxsvs.createStatic'],
+      version = '0.1.0',
+      description = 'Python X-ray Speckle Visibility analysis tools',
+      author = 'Pawel Kwasniewski',
+      author_email = 'pawel.kw@gmail.com',
+      url = 'https://github.com/pawel-kw/pyxsvs',
+      install_requires = ['numpy>=1.7','matplotlib>=1.3','fabio','pyFAI'],
+      packages = ['pyxsvs'],
+      entry_points = {
+          'console_scripts': [
+              'pyxsvs = pyxsvs.pyxsvs:main',
+              'makemask = pyxsvs.makemask:main',
+              'createStatic = pyxsvs.createStatic:main'
+              ]
+          },
+       package_data = {
+        '': ['*.txt', '*.rst']
+        }
       )

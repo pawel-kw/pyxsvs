@@ -711,11 +711,13 @@ def peval(x,params):
 #########################################
 # Enable running the module as a script #
 #########################################
-
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='Python XSVS data analysis.')
     parser.add_argument('-i',dest='inputFileName', metavar='./input_file.txt', type=str,
                                help='Input file describing the data',required=True)
     args = parser.parse_args()
-    calculator = pyxsvs(args.inputFileName[0])
+    calculator = pyxsvs(args.inputFileName)
     calculator.calculateVisibility()
+
+if __name__ == '__main__':
+    main()
