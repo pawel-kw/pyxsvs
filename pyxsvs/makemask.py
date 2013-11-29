@@ -4,17 +4,17 @@
 mask is a NxM array of 0 and 1, with 1 indicating the masked pixels, which are
 later excluded from analysis.
 
-*Usage:*
+**Usage:**
 
-    makemask.py -i </path/to/input.txt> -s </path/to/static.edf>
+   - makemask.py -i </path/to/input.txt> -s </path/to/static.edf>
 
-*Requirements:*
+**Requirements:**
 
-    * Static file (output of createStatic.py) must be present.
+    - Static file (output of createStatic.py) must be present.
 
-*Output:*
+**Output:**
     
-    * A mask.edf file, saved into the data directory specified in the input file.
+    - A mask.edf file, saved into the data directory specified in the input file.
         Additionally, the absolute path to the created mask file is added to the 
         Main section of the input file.
 """
@@ -34,15 +34,15 @@ class maskMaker:
     def __init__(self, data, auto_mask, savedir):
         '''The constructor initializes all the variables and creates the plotting window.
 
-        *Input arguments:*
+        **Input arguments:**
             
-            *data*: NxM array
+            - *data*: NxM array
                 The background to be masked - an averaged (static) scattering image.
 
-            *auto_mask*: NxM array
+            - *auto_mask*: NxM array
                 The default mask, masking all the bad pixels.
 
-            *savedir*: string
+            - *savedir*: string
                 Directory where the mask file will be saved.
         '''
         self.mask_saved = False
@@ -79,6 +79,17 @@ class maskMaker:
         cidm = connect('motion_notify_event',self.on_move)
 
     def on_click(self,event):
+        '''The function handling mouse left-click event. Each clicked pixel
+        is added to a list which defines a polygon. After pressing ``m``
+        the created polygon is masked. Pressing ``w`` saves the mask
+        and closes the plot window.
+
+        **Arguments:**
+            - *event*: mouse left-click event
+
+        **Notes**:
+            - unmasking is not yet properly implemented
+        '''
         if not event.inaxes:
             self.xy = []
             return
@@ -121,6 +132,10 @@ class maskMaker:
             close()
 
     def on_move(self,event):
+        '''Function following the movement of mouse cursor in the figure axes
+        and plotting a line from the last clicked point to current cursor
+        position.
+        '''
         if not event.inaxes: return
         self.xm, self.ym = int(event.xdata), int(event.ydata)
         if self.x != 0:
@@ -128,10 +143,14 @@ class maskMaker:
             draw()
 
     def update_img(self):
+        '''Replotting the static image with the current mask
+        '''
         self.img.set_data(n.ma.masked_array(self.data,self.mask))
         draw()
 
     def reset_poly(self):
+        '''Resetting the polygon.
+        '''
         self.xx = []
         self.yy = []
         self.xy = []
