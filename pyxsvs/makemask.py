@@ -1,13 +1,22 @@
-#! /usr/bin/env python
-"""
-Draw a mask on the existing SAXS file to define ROI for calculations.
+#! /usr/bin/env python2
 
-Usage:
-makemask.py </path/to/input.txt>
+""" Draw a mask on the existing SAXS file to define ROI for calculations. The
+mask is a NxM array of 0 and 1, with 1 indicating the masked pixels, which are
+later excluded from analysis.
 
-Requirements:
--mask_medipix.edf must be present in the directory where the script is run.
--SAXS file (output of sumedft.py) must be present.
+*Usage:*
+
+    makemask.py -i </path/to/input.txt> -s </path/to/static.edf>
+
+*Requirements:*
+
+    * Static file (output of createStatic.py) must be present.
+
+*Output:*
+    
+    * A mask.edf file, saved into the data directory specified in the input file.
+        Additionally, the absolute path to the created mask file is added to the 
+        Main section of the input file.
 """
 
 from pylab import zeros,figure,show,title,shape,connect,draw,nonzero,close
@@ -17,10 +26,25 @@ import pyxsvs
 import sys
 import numpy as n
 import fabio
-
+import argparse # parsing command line arguments
 
 class maskMaker:
+    '''Class defining the mask drawing tool.
+    '''
     def __init__(self, data, auto_mask, savedir):
+        '''The constructor initializes all the variables and creates the plotting window.
+
+        *Input arguments:*
+            
+            *data*: NxM array
+                The background to be masked - an averaged (static) scattering image.
+
+            *auto_mask*: NxM array
+                The default mask, masking all the bad pixels.
+
+            *savedir*: string
+                Directory where the mask file will be saved.
+        '''
         self.mask_saved = False
         self.savedir = savedir
         self.fig = figure()
@@ -120,12 +144,23 @@ class maskMaker:
 
 
 if __name__ == '__main__':
-    inputFile = sys.argv[1]
+    module_desc = '''A simple GUI tool to create a mask for XSVS data analysis.
+                   Requires an input file with information about the data set and 
+                   a static file, created with the createStatic.py script.'''
+    parser = argparse.ArgumentParser(description=module_desc)
+    parser.add_argument('-i','--input',dest='inputFileName', metavar='./input.txt', type=str,
+                               help='Input file describing the data',required=True)
+    parser.add_argument('-s','--static',dest='staticFileName', metavar='./static.edf', type=str,
+                               help='Static file',required=True)
+    args = parser.parse_args()
+
+    inputFile = args.inputFileName[0]
+    staticFile = args.staticFileName[0]
     calculator = pyxsvs.pyxsvs(inputFile)
     saveDir = calculator.Parameters['saveDir']
     defaultMaskFile = calculator.Parameters['defaultMaskFile']
     auto_mask = fabio.open(defaultMaskFile).data
-    staticImg = fabio.open(sys.argv[2]).data
+    staticImg = fabio.open(staticFile).data
     masker = maskMaker(staticImg,auto_mask,saveDir)
     show()
     if masker.mask_saved:
