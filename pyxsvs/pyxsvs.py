@@ -4,12 +4,17 @@
 # Find the reST syntax at http://sphinx-doc.org/rest.html
 
 r'''
+.. module:: pyxsvs
+    :platform: Unix, Windows
+
+.. moduleauthor:: Pawel Kwasniewski <pawel.kw@gmail.com>
+
 Overview
 ========
 A class for X-ray Speckle Visibility Spectroscopy data analysis.
 
-Classes and functions defined in this file
-------------------------------------------
+Classes and functions defined here
+----------------------------------
 
  - :py:class:`pyxsvs() <pyxsvs.pyxsvs>`:
     Main class contiaining all the functions requred to calculate 
@@ -33,8 +38,8 @@ first and last data file number, exposure time.
     >>> calculator = pyxsvs.pyxsvs('./input.txt')
     >>> calculator.calculateVisibility()
 
-Module Documentation
-====================
+PYXSVS Module Documentation
+===========================
 '''
 
 import pylab
@@ -546,7 +551,7 @@ class pyxsvs(object):
 
 class maskMaker:
     '''Interactive mask drawing tool based entirely on matplotlib (not that
-    it's a good thinkg...)
+    it's a good thing...)
     '''
     def __init__(self, data, auto_mask, savedir):
         self.savedir = savedir
