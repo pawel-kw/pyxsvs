@@ -1,6 +1,15 @@
 #! /usr/bin/env python2
 
-""" Draw a mask on the existing SAXS file to define ROI for calculations. The
+"""
+.. module:: makemask
+    :platform: Unix, Windows
+
+.. moduleauthor:: Pawel Kwasniewski <pawel.kw@gmail.com>
+
+makemask Module Documentation
+=============================
+
+Draw a mask on the existing SAXS file to define ROI for calculations. The
 mask is a NxM array of 0 and 1, with 1 indicating the masked pixels, which are
 later excluded from analysis.
 
