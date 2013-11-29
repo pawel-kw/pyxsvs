@@ -1,3 +1,4 @@
+#!/usr/bin/python2
 # -*- coding: utf-8 -*-
 # pyxsvs.py
 # Find the reST syntax at http://sphinx-doc.org/rest.html
@@ -52,6 +53,7 @@ from scipy.special import gamma, gammaln
 import string
 import pickle
 from matplotlib.path import Path
+import argparse # parsing command line arguments
 #import lmfit # not used for the moment
 
 # Figure settings
@@ -701,3 +703,14 @@ def peval(x,params):
     result = nbinomPMF(x,K,M)
     return result
 
+#########################################
+# Enable running the module as a script #
+#########################################
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Python XSVS data analysis.')
+    parser.add_argument('-i',dest='inputFileName', metavar='./input_file.txt', type=str,
+                               help='Input file describing the data',required=True)
+    args = parser.parse_args()
+    calculator = pyxsvs(args.inputFileName[0])
+    calculator.calculateVisibility()
