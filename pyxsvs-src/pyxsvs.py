@@ -17,21 +17,21 @@ Classes and functions defined here
 ----------------------------------
 
  - :py:class:`pyxsvs() <pyxsvs.pyxsvs>`:
-    Main class contiaining all the functions requred to calculate 
+    Main class contiaining all the functions requred to calculate
     visibility functions and to analyse them.
 
  - :py:func:`filename() <pyxsvs.filename>`:
-    Function returning a list of ID10 style filenames according to the given input 
+    Function returning a list of ID10 style filenames according to the given input
     parameters (prefix, suffix, extension, first and last file number)
 
 Usage example
 -------------
 
 In order to calculate visibility functions the dataset needs to be described by
-an input file - a text file with structure similar to MS Windows INI files. 
-An example input file is provided. The :Main: section in the file contains 
-general settings applicable to the whole XSVS data set. The :Exp_n: sections 
-contain information about different exposures: data file suffix and prefix, 
+an input file - a text file with structure similar to MS Windows INI files.
+An example input file is provided. The :Main: section in the file contains
+general settings applicable to the whole XSVS data set. The :Exp_n: sections
+contain information about different exposures: data file suffix and prefix,
 first and last data file number, exposure time.
 
     >>> import pyxsvs
@@ -89,15 +89,15 @@ class pyxsvs(object):
         **Input parameters:**
 
         :py:attr: inputFileName: string,
-                    Path to the input file describing the data set. The input 
+                    Path to the input file describing the data set. The input
                     file is a plain text file with a structure similar to MS Windows
                     INI files.
         :py:attr: \*\*kwargs: key=value pairs,
-                    When given, they overwrite the parameters contained in the input 
+                    When given, they overwrite the parameters contained in the input
                     file.
 
         **Returns:**
-        
+
         :py:class: pyxsvs object
         .. document private Functions
         '''
@@ -114,7 +114,7 @@ class pyxsvs(object):
         self.qBins = []
         self.histStdDev = []
         self.trace = numpy.array([])
-        
+
         # Read input file
         if type(inputFileName) == type(''):
             try:
@@ -169,7 +169,7 @@ class pyxsvs(object):
                 }
 
     def parseInput(self,config):
-        r'''Function reading the input file and setting the 
+        r'''Function reading the input file and setting the
         :self.Parameters: acordingly.
         '''
         self.Parameters['saveDir'] = config.get('Main','save dir')
@@ -207,7 +207,7 @@ class pyxsvs(object):
             self.Results[exposure]['expTime'] = currExpParams['expTime']
 
     def setParameters(self,**kwargs):
-        r'''Sets the parameters given in keyword - value pairs to known settings 
+        r'''Sets the parameters given in keyword - value pairs to known settings
         keywords. Unknown key - value pairs are skipped.
         '''
         for kw in kwargs:
@@ -215,7 +215,7 @@ class pyxsvs(object):
                 self.Parameters[kw] = kwargs[kw]
             else:
                 pass # Ignoring unkwonw settings
-        
+
     def constructQVector(self):
         r'''Generates a q vector acording to settings in :self.Parameters:
         '''
@@ -229,7 +229,7 @@ class pyxsvs(object):
     def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10)):
         '''Data reading and processing function. Here's where everything happens.
         By default the data files are histogrammed only after applying the mask.
-        When the *useFlatField* parameter is set to *True*, each data file is divided 
+        When the *useFlatField* parameter is set to *True*, each data file is divided
         by the flat field and rounded to integers before histogramming.
 
         *Accepted input:*
@@ -247,10 +247,10 @@ class pyxsvs(object):
             List of bins for the histogram
 
         *Returns:*
-        
+
         *(globalPDFArray,qBins,histStddev,trace)*: tupile
             Results of histogramming:
-            
+
             *globalPDFArray*: list of histograms for each q ring
 
             *qBins*: list of histogram bins for each q ring
@@ -272,7 +272,7 @@ class pyxsvs(object):
             sflush()
             dataFile = fabio.open(fileList[i])
             try:
-                rawData = dataFile.data
+                rawData = array(dataFile.data, dtype=float)
             except ValueError:
                 print 'Problems reading file %s' % fileList[i]
                 sys.exit()
@@ -281,8 +281,8 @@ class pyxsvs(object):
                 globalPDFArray = list(numpy.zeros(nq))
                 sqrGlobalPDFArray = list(numpy.zeros(nq))
             if self.Parameters['useFlatField']:
-                rawData /= flatField 
-                rawData = numpy.around(rawData,0) 
+                rawData /= flatField
+                rawData = numpy.around(rawData,0)
             # For each file iterate over q rings
             for j in xrange(nq):
                 data = rawData[qRings[j]]
@@ -300,7 +300,7 @@ class pyxsvs(object):
         endTime = time()
         print '\nCalculations took %.2f s' % (endTime-startTime)
         return globalPDFArray,qBins,histStddev,trace
-    
+
     def createFastStatic(self,fileList,qRings=0):
         r'''Function creating an averaged 2D SAXS image from data files
         provided in :fileList: and producing bins for photon counting
@@ -346,7 +346,7 @@ class pyxsvs(object):
             return staticFile,histBins
         else:
             return staticFile
-            
+
     def createMask(self):
         autoMask = fabio.open(self.Parameters['defaultMaskFile']).data
         saveDir = self.Parameters['saveDir']
@@ -649,7 +649,7 @@ class maskMaker:
 ###############################
 
 def filename(pref,suf,firstf,lastf):
-    '''Function creating file name list 
+    '''Function creating file name list
     '''
     numb=range(firstf,lastf+1)
     fname=numb
@@ -658,7 +658,7 @@ def filename(pref,suf,firstf,lastf):
             fname[i]=pref+string.zfill(str(numb[i]),4)+suf
         else:
             fname[i]=pref+str(numb[i])+suf
-    return fname 
+    return fname
 
 def nbinomPMF(x,K,M):
     '''Negative Binomial (Poisson-Gamma) distribution function.
@@ -683,7 +683,7 @@ def poisson(x,K):
     Pk = exp(-K)*numpy.power(K,x)/gamma(x+1)
     return Pk
 
-def residuals(params,y,x,yerr):  
+def residuals(params,y,x,yerr):
     '''Residuals function used for least squares fitting
     '''
     M,K = params
@@ -691,8 +691,8 @@ def residuals(params,y,x,yerr):
     result = (y - numpy.log10(nbinomPMF(x,K,M)))/yerr
     return result
 
-def residuals2(params,y,x,yerr,K):  
-    '''Residuals function used for least squares fitting with 
+def residuals2(params,y,x,yerr,K):
+    '''Residuals function used for least squares fitting with
     *K* parameter fixed.
     '''
     M = params
@@ -701,7 +701,7 @@ def residuals2(params,y,x,yerr,K):
     return result
 
 def peval(x,params):
-    '''Function evaluating the binomial distribution for the 
+    '''Function evaluating the binomial distribution for the
     goven set of input parameters. Redundant - should be removed.
     '''
     M,K = params
