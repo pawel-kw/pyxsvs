@@ -1,0 +1,31 @@
+[Main]
+save dir = ./
+data dir = ../../data/xsvs-series/
+flat field = ../maxipix1_flatfield_2013.edf
+default mask = ../maxipix1_mask_2013.edf
+q1 = 0.010
+qs = 0.001
+q2 = 0.013
+dq = 4e-04
+sample name = SiD_1-0_XSVS_
+wavelength = 1.53
+cenx = 125
+ceny = 118
+pix = 0.055
+sddist = 2140
+figure title = SiD_1-0 40 degC
+
+[Exp_1]
+data prefix = sid1-0_40C_att0_
+data suffix = .edf.gz
+first data file = 1
+last data file = 360
+exp time = 5e-5
+
+[Exp_2]
+data prefix = sid1-0_40C_att0_
+data suffix = .edf.gz
+first data file = 361
+last data file = 720
+exp time = 1e-4
+
