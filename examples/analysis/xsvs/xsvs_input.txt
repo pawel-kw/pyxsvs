@@ -28,4 +28,3 @@ data suffix = .edf.gz
 first data file = 361
 last data file = 720
 exp time = 1e-4
-
