@@ -143,6 +143,7 @@ class pyxsvs(object):
             self.mask = fabio.open(self.Parameters['maskFile']).data # Load mask
         except:
             print 'Mask not set, please create one before trying to calculate anything!'
+        self.dim1,self.dim2 = shape(self.static)
 
     def initParameters(self):
         r'''Acts on the :sefl.Parameters: dictionary. Sets initial parameter values.
@@ -151,7 +152,7 @@ class pyxsvs(object):
                 'saveDir' : '',
                 'dataDir' : '',
                 'flatFieldFile' : '',
-                'useFlatField' : False,
+                'useFlatField' : True,
                 'maskFile' : '',
                 'defaultMaskFile' : '',
                 'q1' : 0.0,
@@ -164,6 +165,7 @@ class pyxsvs(object):
                 'ceny' : 0.0,
                 'pixSize' : 0.0,
                 'sdDist' : 0.0,
+                'mode'  : 'XSVS',
                 'exposureList' : '',
                 'exposureParams' : {},
                 }
@@ -190,21 +192,59 @@ class pyxsvs(object):
         self.Parameters['ceny'] = config.getfloat('Main','ceny')
         self.Parameters['pixSize'] = config.getfloat('Main','pix')
         self.Parameters['sdDist'] = config.getfloat('Main','sddist')
-        secList = config.sections()
-        secList.remove('Main')
-        exposureList = numpy.sort(secList)
-        self.Parameters['exposureList'] = exposureList
-        for i in xrange(len(exposureList)):
-            exposure = exposureList[i]
-            currExpParams = {}
-            currExpParams['dataSuf'] = config.get(exposure,'data suffix')
-            currExpParams['dataPref'] = config.get(exposure,'data prefix')
-            currExpParams['n1'] = config.getint(exposure,'first data file')
-            currExpParams['n2'] = config.getint(exposure,'last data file')
-            currExpParams['expTime'] = config.getfloat(exposure,'exp time')
-            self.Parameters['exposureParams'][exposure] = currExpParams
-            self.Results[exposure] = {} # Initialize Results container
-            self.Results[exposure]['expTime'] = currExpParams['expTime']
+        if config.has_option('Main','mode'):
+            self.Parameters['mode'] = config.get('Main','mode')
+        else:
+            self.Parameters['mode'] = 'XSVS' # Assuming default XSVS data mode
+        if self.Parameters['mode'] == 'XSVS':
+            secList = config.sections()
+            secList.remove('Main')
+            exposureList = numpy.sort(secList)
+            self.Parameters['exposureList'] = exposureList
+            for i in xrange(len(exposureList)):
+                exposure = exposureList[i]
+                currExpParams = {}
+                currExpParams['dataSuf'] = config.get(exposure,'data suffix')
+                currExpParams['dataPref'] = config.get(exposure,'data prefix')
+                currExpParams['n1'] = config.getint(exposure,'first data file')
+                currExpParams['n2'] = config.getint(exposure,'last data file')
+                currExpParams['expTime'] = config.getfloat(exposure,'exp time')
+                self.Parameters['exposureParams'][exposure] = currExpParams
+                self.Results[exposure] = {} # Initialize Results container
+                self.Results[exposure]['expTime'] = currExpParams['expTime']
+        elif self.Parameters['mode'] == 'XPCS':
+            expParams = {}
+            self.Parameters['exposureList'] = ['Exp_bins']
+            expParams['dataSuf'] = config.get('Exp_bins','data suffix')
+            expParams['dataPref'] = config.get('Exp_bins','data prefix')
+            expParams['n1'] = config.getint('Exp_bins','first data file')
+            expParams['n2'] = config.getint('Exp_bins','last data file')
+            expParams['expTime'] = config.getfloat('Exp_bins','exp time')
+            expParams['binStart'] = config.getfloat('Exp_bins','bin start')
+            expParams['binStop'] = config.getfloat('Exp_bins','bin stop')
+            expParams['binStep'] = config.getint('Exp_bins','bin step')
+            self.Parameters['exposureParams']['Exp_bins'] = expParams
+            # Generate different exposures by binning frames
+            #fileBins = range(expParams['binStart'],
+            #                 expParams['binStop'],expParams['binStep'])
+            fileBins = [int(x) for x in pylab.logspace(expParams['binStart'],
+                                                 expParams['binStop'],
+                                                 expParams['binStep'])]
+            exposureList = range(len(fileBins))
+            for ii in xrange(len(fileBins)):
+                exposureLabel = 'Exp_%d' % ii
+                exposureList[ii] = exposureLabel
+                currExpParams = {}
+                currExpParams['dataSuf'] = expParams['dataSuf']
+                currExpParams['dataPref'] = expParams['dataPref']
+                currExpParams['n1'] = expParams['n1']
+                currExpParams['n2'] = expParams['n2']
+                currExpParams['expTime'] = expParams['expTime'] * fileBins[ii]
+                currExpParams['img_to_bin'] = fileBins[ii]
+                self.Parameters['exposureParams'][exposureLabel] = currExpParams
+                self.Results[exposureLabel] = {} # Initialize Results container
+                self.Results[exposureLabel]['expTime'] = currExpParams['expTime']
+            self.Parameters['exposureList'] = exposureList
 
     def setParameters(self,**kwargs):
         r'''Sets the parameters given in keyword - value pairs to known settings
@@ -226,7 +266,7 @@ class pyxsvs(object):
         self.qVector = numpy.arange(q1,q2+qs,qs)
         self.qVecLen = len(self.qVector)
 
-    def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10)):
+    def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10),img_to_bin=1):
         '''Data reading and processing function. Here's where everything happens.
         By default the data files are histogrammed only after applying the mask.
         When the *useFlatField* parameter is set to *True*, each data file is divided
@@ -246,6 +286,10 @@ class pyxsvs(object):
         *bins*: list
             List of bins for the histogram
 
+        *img_to_bin*: int
+            Number of data frames to be summed for analysis - used to bin images
+            to generate longer exposures from an XPCS data series
+
         *Returns:*
 
         *(globalPDFArray,qBins,histStddev,trace)*: tupile
@@ -262,7 +306,13 @@ class pyxsvs(object):
         '''
         startTime = time()
         # Iterate over files
-        n = len(fileList)
+        n = len(fileList)/img_to_bin # effective number of frames
+        # Reshape the file list if binning is to be done
+        if img_to_bin > 1:
+            nfiles = len(fileList)
+            usedFiles = nfiles - nfiles % img_to_bin
+            nFileBins = usedFiles / img_to_bin # number of bins
+            fileList = numpy.reshape(fileList[:usedFiles],(nFileBins,img_to_bin))
         nq = len(qRings)
         trace = numpy.zeros((nq,n))
         qHist = list(numpy.zeros(nq))
@@ -270,9 +320,16 @@ class pyxsvs(object):
         for i in xrange(n):
             swrite('\r'+str(int(i*100./n))+'%')
             sflush()
-            dataFile = fabio.open(fileList[i])
             try:
-                rawData = array(dataFile.data, dtype=float)
+                if img_to_bin == 1:
+                    dataFile = fabio.open(fileList[i])
+                    rawData = numpy.array(dataFile.data, dtype=float)
+                else:
+                    filesToBin = fileList[i]
+                    if i ==0: print 'Binning %d files' % len(filesToBin)
+                    rawData = numpy.zeros((self.dim1,self.dim2))
+                    for fileName in filesToBin:
+                        rawData += numpy.array(fabio.open(fileName).data, dtype=float)
             except ValueError:
                 print 'Problems reading file %s' % fileList[i]
                 sys.exit()
@@ -301,7 +358,7 @@ class pyxsvs(object):
         print '\nCalculations took %.2f s' % (endTime-startTime)
         return globalPDFArray,qBins,histStddev,trace
 
-    def createFastStatic(self,fileList,qRings=0):
+    def createFastStatic(self,fileList,qRings=0,nimbins=1):
         r'''Function creating an averaged 2D SAXS image from data files
         provided in :fileList: and producing bins for photon counting
         histograms based on the numbers of photons found in the averaged image.
@@ -338,11 +395,12 @@ class pyxsvs(object):
                 data = staticFile[qRings[j]]
                 mCnt = numpy.mean(data)
                 stddevCnt = numpy.std(data)
-                estim = int(mCnt+stddevCnt)
-                if estim > 10:
-                    histBins[j] = numpy.arange(int(mCnt+stddevCnt))
+                estim = int(numpy.max(data)*nimbins)
+                estim_start = int(numpy.min(data)*nimbins)
+                if estim > 30:
+                    histBins[j] = [int(x) for x in numpy.linspace(estim_start,estim,30)]
                 else:
-                    histBins[j] = numpy.arange(10)
+                    histBins[j] = numpy.arange(20)
             return staticFile,histBins
         else:
             return staticFile
@@ -357,21 +415,25 @@ class pyxsvs(object):
         r'''Function calculating visibility for each of the exposures
         listed in the input file.
         '''
+        dataDir = self.Parameters['dataDir']
+        saveDir = self.Parameters['saveDir']
+        outPrefix = self.Parameters['outPrefix']
+        wavelength = self.Parameters['wavelength']
+        cenx = self.Parameters['cenx']
+        ceny = self.Parameters['ceny']
+        pixSize = self.Parameters['pixSize']
+        sdDist = self.Parameters['sdDist']
+        dq = self.Parameters['dq']
         exposureList = self.Parameters['exposureList']
         for i in xrange(len(exposureList)):
             exposure = exposureList[i]
             currExpResult = {}
             # Unpack useful variables
-            dataDir = self.Parameters['dataDir']
-            saveDir = self.Parameters['saveDir']
-            outPrefix = self.Parameters['outPrefix']
-            wavelength = self.Parameters['wavelength']
-            cenx = self.Parameters['cenx']
-            ceny = self.Parameters['ceny']
-            pixSize = self.Parameters['pixSize']
-            sdDist = self.Parameters['sdDist']
-            dq = self.Parameters['dq']
             currExpParams = self.Parameters['exposureParams'][exposure]
+            if currExpParams.has_key('img_to_bin'):
+                nimbin = currExpParams['img_to_bin']
+            else:
+                nimbin = 1
             dataSuf = currExpParams['dataSuf']
             dataPref = currExpParams['dataPref']
             n1 = currExpParams['n1']
@@ -379,7 +441,7 @@ class pyxsvs(object):
             expTime = currExpParams['expTime']
             expTimeLabel = 't_exp = %.1e s' % expTime
             fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
-            dim1,dim2 = shape(fabio.open(fileNames[0]).data) # Get the data dimensions
+            dim1,dim2 = self.dim1,self.dim2 #shape(fabio.open(fileNames[0]).data) # Get the data dimensions
             qArray = numpy.ones((dim2,dim1))
             wf = 4*pi/wavelength
             [X,Y] = mgrid[1-ceny:dim2+1-ceny,1-cenx:dim1+1-cenx]
@@ -393,9 +455,9 @@ class pyxsvs(object):
                 qImg[qRings[j]] = 0
             # Get static and bins
             if len(fileNames) > 200:
-                fastStatic,histBins = self.createFastStatic(fileNames[:200],qRings)
+                fastStatic,histBins = self.createFastStatic(fileNames[:200],qRings,nimbins=nimbin)
             else:
-                fastStatic,histBins = self.createFastStatic(fileNames,qRings)
+                fastStatic,histBins = self.createFastStatic(fileNames,qRings,nimbins=nimbin)
             qImg = numpy.ma.masked_array(numpy.ones((dim1,dim2)),qImg) # Masked numpy.array for plotting
             figQ = pylab.figure()
             ax1 = figQ.add_subplot(111)
@@ -410,7 +472,9 @@ class pyxsvs(object):
             # Start analysis! #
             ###################
             print 'Histograming %s' % exposure
-            xsvsRes,hbins,histStddev,trace = self.histogramData(fileNames,qRings,self.flatField,bins=histBins)
+            xsvsRes,hbins,histStddev,trace = self.histogramData(fileNames,qRings,
+                                                                self.flatField,bins=histBins,
+                                                                img_to_bin=nimbin)
             print 'Done for %s, now plotting and fitting...' % exposure
             # Plot the trace for each q
             figTrace = pylab.figure(figsize=(8,7)) # Trace plots
@@ -430,6 +494,7 @@ class pyxsvs(object):
             MArray = numpy.zeros((self.qVecLen,2)) # Number of modes
             KArray = numpy.zeros((self.qVecLen,2)) # Mean number of counts
             RArray = numpy.zeros((self.qVecLen,2)) # Low-count estimate of 1/M
+            currResults = {}
             for j in xrange(self.qVecLen):
                 qKey = 'q%03i' % j
                 ax2 = figHist.add_subplot(nRows,nCols,j+1)
@@ -450,6 +515,8 @@ class pyxsvs(object):
                 roi = where(ydata>1e-5)
                 if len(roi[0]) > len(ydata)-2:
                     roi = (numpy.array(roi[0][:-2]),)
+                elif len(roi[0] < 2):
+                    roi = where(ydata>0)
                 #######
                 # Fit #
                 #######
@@ -507,7 +574,6 @@ class pyxsvs(object):
                 ################
                 # Save results #
                 ################
-                currResults = {}
                 currResults[qKey] = {}
                 currResults[qKey]['histogramBins'] = xdata
                 currResults[qKey]['histogram'] = ydata
@@ -547,7 +613,8 @@ class pyxsvs(object):
             axE.set_ylabel('M, K')
             axE.legend(loc=1)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_fit_params.png',dpi=200)
-        pickle.dump(self.Results, open(saveDir+outPrefix+dataPref+'results.p', "wb"))
+        with open(saveDir+outPrefix+dataPref+'results.p', "wb") as resFile:
+            pickle.dump(self.Results, resFile)
 
 class maskMaker:
     '''Interactive mask drawing tool based entirely on matplotlib (not that
