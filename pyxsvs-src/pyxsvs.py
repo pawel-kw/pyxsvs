@@ -173,6 +173,17 @@ class pyxsvs(object):
     def parseInput(self,config):
         r'''Function reading the input file and setting the
         :self.Parameters: acordingly.
+        For conveniance, the old pyxpcs input file is also supported.
+        '''
+        # First, recognize if it's the old pyxpcs or the new pyxsvs format
+        if config.has_section('Main'):
+            self._parseNewInput(config)
+        elif config.has_section('Directories'):
+            self._parseOldInput(config)
+
+    def _parseNewInput(self,config):
+        r'''Function reading the input file and setting the
+        :self.Parameters: acordingly.
         '''
         self.Parameters['saveDir'] = config.get('Main','save dir')
         self.Parameters['dataDir'] = config.get('Main','data dir')
@@ -246,6 +257,65 @@ class pyxsvs(object):
                 self.Results[exposureLabel]['expTime'] = currExpParams['expTime']
             self.Parameters['exposureList'] = exposureList
 
+
+    def _parseOldInput(self,config):
+        r'''Function reading the old pyxpcs input file and setting the
+        :self.Parameters: acordingly. The old input file will still need some new fields:
+            *default mask* and *flat_field*.
+        '''
+        self.Parameters['saveDir'] = config.get('Directories','save dir')
+        self.Parameters['dataDir'] = config.get('Directories','data dir')
+        try:
+            self.Parameters['flatFieldFile'] = config.get('Directories','flat field')
+        except:
+            print 'Flat field not set in the config file'
+        try:
+            self.Parameters['maskFile'] = config.get('Directories','mask')
+        except:
+            print 'Mask not set in the config file'
+        self.Parameters['defaultMaskFile'] = config.get('Directories','default mask')
+        self.Parameters['q1'] = config.getfloat('Analysis','q1')
+        self.Parameters['q2'] = config.getfloat('Analysis','q2')
+        self.Parameters['qs'] = config.getfloat('Analysis','qs')
+        self.Parameters['dq'] = config.getfloat('Analysis','dq')
+        self.Parameters['outPrefix'] = config.get('Filenames','sample name')
+        self.Parameters['wavelength'] = config.getfloat('Beam','wavelength')
+        self.Parameters['cenx'] = config.getfloat('Beam','cenx')
+        self.Parameters['ceny'] = config.getfloat('Beam','ceny')
+        self.Parameters['pixSize'] = config.getfloat('Detector','pix')
+        self.Parameters['sdDist'] = config.getfloat('Detector','sddist')
+        expParams = {}
+        self.Parameters['exposureList'] = ['Exp_bins']
+        expParams['dataSuf'] = config.get('Filenames','data suffix')
+        expParams['dataPref'] = config.get('Filenames','data prefix')
+        expParams['n1'] = config.getint('Filenames','first data file')
+        expParams['n2'] = config.getint('Filenames','last data file')
+        #expParams['expTime'] = config.getfloat('Filenames','exp time')
+        #expParams['binStart'] = config.getfloat('Filenames','bin start')
+        #expParams['binStop'] = config.getfloat('Exp_bins','bin stop')
+        #expParams['binStep'] = config.getint('Exp_bins','bin step')
+        self.Parameters['exposureParams']['Exp_bins'] = expParams
+        # Generate different exposures by binning frames
+        #fileBins = range(expParams['binStart'],
+        #                 expParams['binStop'],expParams['binStep'])
+        #fileBins = [int(x) for x in pylab.logspace(expParams['binStart'],
+        #                                     expParams['binStop'],
+        #                                     expParams['binStep'])]
+        #exposureList = range(len(fileBins))
+        #for ii in xrange(len(fileBins)):
+        #    exposureLabel = 'Exp_%d' % ii
+        #    exposureList[ii] = exposureLabel
+        #    currExpParams = {}
+        #    currExpParams['dataSuf'] = expParams['dataSuf']
+        #    currExpParams['dataPref'] = expParams['dataPref']
+        #    currExpParams['n1'] = expParams['n1']
+        #    currExpParams['n2'] = expParams['n2']
+        #    currExpParams['expTime'] = expParams['expTime'] * fileBins[ii]
+        #    currExpParams['img_to_bin'] = fileBins[ii]
+        #    self.Parameters['exposureParams'][exposureLabel] = currExpParams
+        #    self.Results[exposureLabel] = {} # Initialize Results container
+        #    self.Results[exposureLabel]['expTime'] = currExpParams['expTime']
+        #self.Parameters['exposureList'] = exposureList
     def setParameters(self,**kwargs):
         r'''Sets the parameters given in keyword - value pairs to known settings
         keywords. Unknown key - value pairs are skipped.
@@ -465,8 +535,10 @@ class pyxsvs(object):
             ax1.pcolormesh(X,Y,staticImg)
             ax1.set_aspect(1)
             ax1.pcolormesh(X,Y,qImg,alpha=0.5,cmap=pylab.cm.gray)
-            ax1.set_xlim(numpy.min(X),numpy.max(X))
-            ax1.set_ylim(numpy.min(Y),numpy.max(Y))
+            #ax1.set_xlim(numpy.min(X),numpy.max(X))
+            #ax1.set_ylim(numpy.min(Y),numpy.max(Y))
+            ax1.set_xlim(-100,100)
+            ax1.set_ylim(-100,100)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_q_mask.png',dpi=200)
             ###################
             # Start analysis! #

@@ -22,9 +22,9 @@ later excluded from analysis.
     - Static file (output of createStatic.py) must be present.
 
 **Output:**
-    
+
     - A mask.edf file, saved into the data directory specified in the input file.
-        Additionally, the absolute path to the created mask file is added to the 
+        Additionally, the absolute path to the created mask file is added to the
         Main section of the input file.
 """
 
@@ -44,7 +44,7 @@ class maskMaker:
         '''The constructor initializes all the variables and creates the plotting window.
 
         **Input arguments:**
-            
+
             - *data*: NxM array
                 The background to be masked - an averaged (static) scattering image.
 
@@ -172,7 +172,7 @@ class maskMaker:
 
 def main():
     module_desc = '''A simple GUI tool to create a mask for XSVS data analysis.
-                   Requires an input file with information about the data set and 
+                   Requires an input file with information about the data set and
                    a static file, created with the createStatic.py script.'''
     parser = argparse.ArgumentParser(description=module_desc)
     parser.add_argument('-i','--input',dest='inputFileName', metavar='./input.txt', type=str,
@@ -192,7 +192,10 @@ def main():
     show()
     if masker.mask_saved:
         print 'Adding mask to input file'
-        calculator.config.set('Main','mask',value = saveDir+'mask.edf')
+        try:
+            calculator.config.set('Main','mask',value = saveDir+'mask.edf')
+        except:
+            calculator.config.set('Directories','mask',value = saveDir+'mask.edf')
         f = open(inputFile,'w')
         calculator.config.write(f)
         f.close()
