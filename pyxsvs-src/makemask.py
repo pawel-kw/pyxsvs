@@ -28,9 +28,10 @@ later excluded from analysis.
         Main section of the input file.
 """
 
-from pylab import zeros,figure,show,title,shape,connect,draw,nonzero,close
+from pylab import zeros,figure,show,title,shape,connect,draw,nonzero,close,log10,colorbar
 from ConfigParser import RawConfigParser
 from matplotlib.path import Path
+from matplotlib.widgets import CheckButtons
 import pyxsvs
 import sys
 import numpy as n
@@ -59,8 +60,14 @@ class maskMaker:
         self.fig = figure()
         title('Select ROI to mask. Press m to mask or w to save and exit ')
         self.ax = self.fig.add_subplot(111)
+        # Check button for logscale switching
+        self.cbax = self.fig.add_axes([0.01, 0.8, 0.1, 0.15])
+        self.cb_log = CheckButtons(self.cbax, ('log',), (False,))
+        self.cb_log.on_clicked(self.toggle_logscale)
+        self.log_flag = False
         self.canvas = self.ax.figure.canvas
         #self.data = n.log10(data)
+        self.raw_data = data.copy()
         self.data = data
         self.lx, self.ly = shape(self.data)
         self.auto_mask = auto_mask
@@ -75,6 +82,7 @@ class maskMaker:
         self.yy = []
         self.ind = 0
         self.img = self.ax.imshow(self.masked_data,origin='lower',interpolation='nearest',animated=True)
+        self.colorbar = colorbar(self.img,ax=self.ax)
         self.lc,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
         self.lm,=self.ax.plot((0,0),(0,0),'-+w',color='black',linewidth=1.5,markersize=8,markeredgewidth=1.5)
         self.ax.set_xlim(0,self.lx)
@@ -86,6 +94,15 @@ class maskMaker:
         cidb = connect('button_press_event', self.on_click)
         cidk = connect('key_press_event',self.on_click)
         cidm = connect('motion_notify_event',self.on_move)
+
+    def toggle_logscale(self,label):
+        self.log_flag = not self.log_flag
+        if self.log_flag:
+            self.data = log10(self.data+1e-9)
+        else:
+            self.data = self.raw_data
+        self.update_img()
+
 
     def on_click(self,event):
         '''The function handling mouse left-click event. Each clicked pixel
@@ -154,7 +171,10 @@ class maskMaker:
     def update_img(self):
         '''Replotting the static image with the current mask
         '''
-        self.img.set_data(n.ma.masked_array(self.data,self.mask))
+        masked_data = n.ma.masked_array(self.data,self.mask)
+        self.img.set_data(masked_data)
+        vmin,vmax = n.min(masked_data),n.max(masked_data)
+        self.img.set_clim(vmin,vmax)
         draw()
 
     def reset_poly(self):
