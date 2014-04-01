@@ -45,6 +45,7 @@ PYXSVS Module Documentation
 import pylab
 from sys import argv,stdout
 import fabio
+import pyFAI
 from ConfigParser import RawConfigParser
 from os.path import isfile
 import os
@@ -59,7 +60,7 @@ import string
 import pickle
 from matplotlib.path import Path
 import argparse # parsing command line arguments
-#import lmfit # not used for the moment
+import lmfit
 
 # Figure settings
 figParams = {
@@ -165,6 +166,9 @@ class pyxsvs(object):
                 'ceny' : 0.0,
                 'pixSize' : 0.0,
                 'sdDist' : 0.0,
+                'dchi' : 5,
+                'rmin' : 25,
+                'rmax' : 100,
                 'mode'  : 'XSVS',
                 'exposureList' : '',
                 'exposureParams' : {},
@@ -257,7 +261,6 @@ class pyxsvs(object):
                 self.Results[exposureLabel]['expTime'] = currExpParams['expTime']
             self.Parameters['exposureList'] = exposureList
 
-
     def _parseOldInput(self,config):
         r'''Function reading the old pyxpcs input file and setting the
         :self.Parameters: acordingly. The old input file will still need some new fields:
@@ -290,32 +293,7 @@ class pyxsvs(object):
         expParams['dataPref'] = config.get('Filenames','data prefix')
         expParams['n1'] = config.getint('Filenames','first data file')
         expParams['n2'] = config.getint('Filenames','last data file')
-        #expParams['expTime'] = config.getfloat('Filenames','exp time')
-        #expParams['binStart'] = config.getfloat('Filenames','bin start')
-        #expParams['binStop'] = config.getfloat('Exp_bins','bin stop')
-        #expParams['binStep'] = config.getint('Exp_bins','bin step')
         self.Parameters['exposureParams']['Exp_bins'] = expParams
-        # Generate different exposures by binning frames
-        #fileBins = range(expParams['binStart'],
-        #                 expParams['binStop'],expParams['binStep'])
-        #fileBins = [int(x) for x in pylab.logspace(expParams['binStart'],
-        #                                     expParams['binStop'],
-        #                                     expParams['binStep'])]
-        #exposureList = range(len(fileBins))
-        #for ii in xrange(len(fileBins)):
-        #    exposureLabel = 'Exp_%d' % ii
-        #    exposureList[ii] = exposureLabel
-        #    currExpParams = {}
-        #    currExpParams['dataSuf'] = expParams['dataSuf']
-        #    currExpParams['dataPref'] = expParams['dataPref']
-        #    currExpParams['n1'] = expParams['n1']
-        #    currExpParams['n2'] = expParams['n2']
-        #    currExpParams['expTime'] = expParams['expTime'] * fileBins[ii]
-        #    currExpParams['img_to_bin'] = fileBins[ii]
-        #    self.Parameters['exposureParams'][exposureLabel] = currExpParams
-        #    self.Results[exposureLabel] = {} # Initialize Results container
-        #    self.Results[exposureLabel]['expTime'] = currExpParams['expTime']
-        #self.Parameters['exposureList'] = exposureList
     def setParameters(self,**kwargs):
         r'''Sets the parameters given in keyword - value pairs to known settings
         keywords. Unknown key - value pairs are skipped.
@@ -688,6 +666,74 @@ class pyxsvs(object):
         with open(saveDir+outPrefix+dataPref+'results.p', "wb") as resFile:
             pickle.dump(self.Results, resFile)
 
+    def findDB(self,directions=[45,135,-45,-135]):
+        '''Function determining the direct beam position on the given scattering image.
+
+        **Arguments:**
+
+        *xi*,*yi*: float tupile
+            Initial estimates of the direct beam position.
+
+        *img*: 2D array
+            Detector image.
+
+        *dchi*: float
+            Azimuthal angle in deg used for averaging.
+
+        *pix_size* float
+            Pixel size in [m]. Required by the pyFAI integrator function.
+
+        *wavelength* float
+            X-ray wavelength in [m]
+
+        *dist*  float
+            sample-detector distance in [mm]
+
+        *rmin* int
+            lower bound for the fitted ROI (in pixels)
+
+        *rmax*
+            upper bound for the fitted ROI (in pixels)
+
+        *directions* 4 or 3 element list
+            list of angles used for azimuthal integration and fitting
+
+        Returns:
+
+        *[xm,ym]*: float list
+            Direct beam position
+        '''
+        # Note: direct beam x and y positions seem to be switched for the pyFAI
+        # functions.
+        xi = self.Parameters['ceny']
+        yi = self.Parameters['cenx']
+        img = self.static
+        mask = self.mask
+        dchi = self.Parameters['dchi']
+        pixSize = self.Parameters['pixSize'] * 1e-3
+        sdDist = self.Parameters['sdDist'] * 1e-3
+        rmin = self.Parameters['rmin']
+        rmax = self.Parameters['rmax']
+        wavelength = self.Parameters['wavelength'] * 1e-10
+        params = lmfit.Parameters()
+        params.add('xi', value = xi, vary = True)
+        params.add('yi', value = yi, vary = True)
+        fitOut = lmfit.minimize(resid_db,params,\
+                args=(img,mask,dchi,pixSize,wavelength,sdDist,rmin,rmax,directions),full_output=1)
+        fitOut.leastsq()
+        lmfit.report_errors(fitOut.params)
+        # Adding the new direct beam position to the input file:
+        try:
+            self.config.set('Main','cenx',value = fitOut.params['xi'].value)
+            self.config.set('Main','ceny',value = fitOut.params['yi'].value)
+        except:
+            self.config.set('Beam','cenx',value = fitOut.params['xi'].value)
+            self.config.set('Beam','ceny',value = fitOut.params['yi'].value)
+        f = open(inputFile,'w')
+        calculator.config.write(f)
+        f.close()
+
+
 class maskMaker:
     '''Interactive mask drawing tool based entirely on matplotlib (not that
     it's a good thing...)
@@ -847,6 +893,76 @@ def peval(x,params):
     result = nbinomPMF(x,K,M)
     return result
 
+def resid_db(params,img,mask,dchi,pix_size,wavelength,dist,rmin,rmax,directions):
+    '''Calculate residuals for the direct beam position finding function.
+
+    **Input parameters:**
+
+    :py:attr: params: lmfit.Parameters instance,
+            ['xi','yi'] - initial guess for the direct beam position.
+    :py:attr: img: m x n array,
+            Averaged SAXS pattern used for finding the direct beam.
+    :py:attr: mask: m x n array,
+            Mask array - the same size as :py:attr: img.
+    :py:attr: dchi: float,
+            Azimuthal angle to be averaged will be 2 x dchi.
+    :py:attr: pix_size: float,
+            Detector pixel size in [m]. Will be passed to
+            :py:func: pyFAI.azimuthalIntegrator.AzimuthalIntegrator
+    :py:attr: wavelength: float,
+            X-ray wavelength in [m]. Will be passed to
+            :py:func: pyFAI.azimuthalIntegrator.AzimuthalIntegrator
+    :py:attr: dist: float,
+            Sample - Detector distance in [m]. Will be passed to
+            :py:func: pyFAI.azimuthalIntegrator.AzimuthalIntegrator
+    :py:attr: rmin: int,
+            Fit ROI start point, defined in pixels from the origin.
+    :py:attr: rmax: int,
+            Fit ROI end point, defined in pixels from the origin.
+    :py:attr: directions: list of 3 or 4 numbers between -180 and 180,
+            Azimuthal angles giving the centers of the averaged cuts used for fitting.
+            3 values are accepted to avoid problems when the beam stop shadow is
+            hiding one corner of the detector.
+
+    **Returns:**
+
+    :py:attr: resid_I: float,
+            Sum of squared differences between 3 or 4 azimuthal profiles,
+            averaged over 2 x dchi angle.
+
+    **Note:**
+
+    The definition of fit ROI is far from optimal. This should be automatized
+    somehow. Giving the values in pixels in not conveniant and not very easy to define.
+
+    '''
+    xi = params['xi'].value
+    yi = params['yi'].value
+    dim1,dim2 = img.shape
+    poni1 = xi*pix_size
+    poni2 = yi*pix_size
+    integrator = pyFAI.azimuthalIntegrator.AzimuthalIntegrator(poni1=poni1,poni2=poni2,\
+            pixel1=pix_size,pixel2=pix_size,wavelength=wavelength,dist=dist)
+    azimuth_range_set = []#[[45-dchi,45+dchi],[135-dchi,135+dchi],[-45-dchi,-45+dchi],[-135-dchi,-135+dchi]]
+    for i in xrange(len(directions)):
+        ang_chi = directions[i]
+        azimuth_range_set.append([ang_chi-dchi,ang_chi+dchi])
+    nbPt = numpy.min(img.shape)/2
+    I_a = []
+    for i in xrange(len(azimuth_range_set)):
+        azimuth_range = azimuth_range_set[i]
+        q,I = integrator.integrate1d(data = img,mask=mask,
+                nbPt = nbPt,
+                method = 'BBox',
+                azimuth_range = azimuth_range)
+        I_a.append(numpy.log10(I[rmin:rmax]))
+    #resid_I = sum( (I_a[0]-I_a[1])**2 + (I_a[2]-I_a[3])**2 + (I_a[0]-I_a[2])**2 + (I_a[1]-I_a[3])**2)
+    if len(azimuth_range_set) == 4:
+        resid_I =  (I_a[0]-I_a[1])**2 + (I_a[2]-I_a[3])**2 + (I_a[0]-I_a[2])**2 + (I_a[1]-I_a[3])**2
+    elif len(azimuth_range_set) == 3:
+        resid_I = (I_a[0]-I_a[1])**2 +  (I_a[0]-I_a[2])**2 + (I_a[1]-I_a[2])**2
+    return resid_I
+
 #########################################
 # Enable running the module as a script #
 #########################################
@@ -856,6 +972,7 @@ def main():
                                help='Input file describing the data',required=True)
     args = parser.parse_args()
     calculator = pyxsvs(args.inputFileName)
+    calculator.findDB()
     calculator.calculateVisibility()
 
 if __name__ == '__main__':
