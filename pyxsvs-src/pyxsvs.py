@@ -721,6 +721,9 @@ class pyxsvs(object):
                 args=(img,mask,dchi,pixSize,wavelength,sdDist,rmin,rmax,directions),full_output=1)
         fitOut.leastsq()
         lmfit.report_errors(fitOut.params)
+        # Updating parameters:
+        self.Parameters['cenx'] = round(fitOut.params['xi'].value, 2)
+        self.Parameters['ceny'] = round(fitOut.params['yi'].value, 2)
         # Adding the new direct beam position to the input file:
         try:
             self.config.set('Main','cenx',value = '%.2f' % fitOut.params['xi'].value)
