@@ -115,6 +115,7 @@ class pyxsvs(object):
         self.qBins = []
         self.histStdDev = []
         self.trace = numpy.array([])
+        self.inputFileName = inputFileName
 
         # Read input file
         if type(inputFileName) == type(''):
@@ -703,10 +704,8 @@ class pyxsvs(object):
         *[xm,ym]*: float list
             Direct beam position
         '''
-        # Note: direct beam x and y positions seem to be switched for the pyFAI
-        # functions.
-        xi = self.Parameters['ceny']
-        yi = self.Parameters['cenx']
+        xi = self.Parameters['cenx']
+        yi = self.Parameters['ceny']
         img = self.static
         mask = self.mask
         dchi = self.Parameters['dchi']
@@ -724,13 +723,13 @@ class pyxsvs(object):
         lmfit.report_errors(fitOut.params)
         # Adding the new direct beam position to the input file:
         try:
-            self.config.set('Main','cenx',value = fitOut.params['xi'].value)
-            self.config.set('Main','ceny',value = fitOut.params['yi'].value)
+            self.config.set('Main','cenx',value = '%.2f' % fitOut.params['xi'].value)
+            self.config.set('Main','ceny',value = '%.2f' % fitOut.params['yi'].value)
         except:
-            self.config.set('Beam','cenx',value = fitOut.params['xi'].value)
-            self.config.set('Beam','ceny',value = fitOut.params['yi'].value)
-        f = open(inputFile,'w')
-        calculator.config.write(f)
+            self.config.set('Beam','cenx',value = '%.2f' % fitOut.params['xi'].value)
+            self.config.set('Beam','ceny',value = '%.2f' % fitOut.params['yi'].value)
+        f = open(self.inputFileName,'w')
+        self.config.write(f)
         f.close()
 
 
@@ -936,8 +935,10 @@ def resid_db(params,img,mask,dchi,pix_size,wavelength,dist,rmin,rmax,directions)
     somehow. Giving the values in pixels in not conveniant and not very easy to define.
 
     '''
-    xi = params['xi'].value
-    yi = params['yi'].value
+    # Note: direct beam x and y positions seem to be switched for the pyFAI
+    # functions.
+    xi = params['yi'].value
+    yi = params['xi'].value
     dim1,dim2 = img.shape
     poni1 = xi*pix_size
     poni2 = yi*pix_size
