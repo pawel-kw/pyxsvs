@@ -151,6 +151,7 @@ class pyxsvs(object):
         r'''Acts on the :sefl.Parameters: dictionary. Sets initial parameter values.
         '''
         self.Parameters = {
+                'oldInputFormat' : False,
                 'saveDir' : '',
                 'dataDir' : '',
                 'flatFieldFile' : '',
@@ -190,6 +191,7 @@ class pyxsvs(object):
         r'''Function reading the input file and setting the
         :self.Parameters: acordingly.
         '''
+        self.Parameters['oldInputFormat'] = False
         self.Parameters['saveDir'] = config.get('Main','save dir')
         self.Parameters['dataDir'] = config.get('Main','data dir')
         self.Parameters['flatFieldFile'] = config.get('Main','flat field')
@@ -267,6 +269,7 @@ class pyxsvs(object):
         :self.Parameters: acordingly. The old input file will still need some new fields:
             *default mask* and *flat_field*.
         '''
+        self.Parameters['oldInputFormat'] = True
         self.Parameters['saveDir'] = config.get('Directories','save dir')
         self.Parameters['dataDir'] = config.get('Directories','data dir')
         try:
@@ -708,6 +711,8 @@ class pyxsvs(object):
         yi = self.Parameters['ceny']
         img = self.static
         mask = self.mask
+        if self.Parameters['oldInputFormat']:
+            mask = (mask + 1) % 2
         dchi = self.Parameters['dchi']
         pixSize = self.Parameters['pixSize'] * 1e-3
         sdDist = self.Parameters['sdDist'] * 1e-3
