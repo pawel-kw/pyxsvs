@@ -453,6 +453,7 @@ class pyxsvs(object):
                     histBins[j] = [int(x) for x in numpy.linspace(estim_start,estim,30)]
                 else:
                     histBins[j] = numpy.arange(20)
+            print len(histBins[0])
             return staticFile,histBins
         else:
             return staticFile
@@ -522,6 +523,7 @@ class pyxsvs(object):
             ax1.set_xlim(-100,100)
             ax1.set_ylim(-100,100)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_q_mask.png',dpi=200)
+            pylab.close(figQ)
             ###################
             # Start analysis! #
             ###################
@@ -644,8 +646,10 @@ class pyxsvs(object):
                 self.Results[exposure]['data'] = currResults
             pylab.figure(figHist.number)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_hist_fits.png',dpi=200)
+            pylab.close(figHist)
             pylab.figure(figTrace.number)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_trace.png',dpi=200)
+            pylab.close(figTrace)
             # Plot fit results
             figRes = pylab.figure(figsize=(6,4)) # Figure for fit results
             figRes.suptitle(expTimeLabel,fontsize=12)
@@ -667,6 +671,7 @@ class pyxsvs(object):
             axE.set_ylabel('M, K')
             axE.legend(loc=1)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_fit_params.png',dpi=200)
+            pylab.close(figRes)
         with open(saveDir+outPrefix+dataPref+'results.p', "wb") as resFile:
             pickle.dump(self.Results, resFile)
 
