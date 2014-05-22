@@ -450,7 +450,8 @@ class pyxsvs(object):
                 estim = int(numpy.max(data)*nimbins)
                 estim_start = int(numpy.min(data)*nimbins)
                 if estim > 30:
-                    histBins[j] = [int(x) for x in numpy.linspace(estim_start,estim,30)]
+                    #histBins[j] = [int(x) for x in numpy.linspace(estim_start,estim,30)]
+                    histBins[j] = numpy.arange(20)
                 else:
                     histBins[j] = numpy.arange(20)
             print len(histBins[0])
@@ -635,6 +636,8 @@ class pyxsvs(object):
                 currResults[qKey]['histogram'] = ydata
                 currResults[qKey]['histStdDev'] = yerr
                 currResults[qKey]['trace'] = trace[j,:]
+                currResults[qKey]['q'] = \
+                        {'value': self.qVector[j]}
                 currResults[qKey]['M'] = \
                         {'value': MArray[j,0], 'stddev': MArray[j,1]}
                 currResults[qKey]['K'] = \
@@ -675,7 +678,35 @@ class pyxsvs(object):
         with open(saveDir+outPrefix+dataPref+'results.p', "wb") as resFile:
             pickle.dump(self.Results, resFile)
 
-    def findDB(self,directions=[45,135,-45,-135]):
+    def findDB(self,**kwargs):
+        self._findDB_old()
+    
+    def _findDB_new(self,sr=2):
+        '''A new implementation of direct beam position determination. Based on the solution
+        used at the cSAXS beamline (SLS).
+
+        **Arguments:**
+
+        *sr*: int
+            Search radius in pixels. The search area will be defined as (xi,yi) +/- sr.
+            This means that sr = 2 will give a 5x5 pixel search area.
+
+        '''
+        xi = round(self.Parameters['cenx'])
+        yi = round(self.Parameters['ceny'])
+        img = self.static
+        mask = self.mask
+        if self.Parameters['oldInputFormat']:
+            mask = (mask + 1) % 2
+        pixSize = self.Parameters['pixSize'] * 1e-3
+        sdDist = self.Parameters['sdDist'] * 1e-3
+        wavelength = self.Parameters['wavelength'] * 1e-10
+        # Create the list of pixels of the search area:
+        [X,Y] = mgrid[-xi:self.dim1-xi,-yi:self.dim2-yi]
+        Z = sqrt(X**2 + Y**2)
+        A = where(Z < sr) # search area
+
+    def _findDB_old(self,directions=[45,135,-45,-135]):
         '''Function determining the direct beam position on the given scattering image.
 
         **Arguments:**
@@ -985,7 +1016,7 @@ def main():
     parser.add_argument('-i',dest='inputFileName', metavar='./input_file.txt', type=str,
                                help='Input file describing the data',required=True)
     args = parser.parse_args()
-    calculator = pyxsvs(args.inputFileName)
+    calculator = pyxsvs(args.inputFileName,useFlatField=True)
     calculator.findDB()
     calculator.calculateVisibility()
 
