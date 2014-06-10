@@ -210,6 +210,7 @@ class pyxsvs(object):
         self.Parameters['ceny'] = config.getfloat('Main','ceny')
         self.Parameters['pixSize'] = config.getfloat('Main','pix')
         self.Parameters['sdDist'] = config.getfloat('Main','sddist')
+        self.Parameters['figTitle'] = config.get('Main','figure title')
         if config.has_option('Main','mode'):
             self.Parameters['mode'] = config.get('Main','mode')
         else:
@@ -449,9 +450,9 @@ class pyxsvs(object):
                 stddevCnt = numpy.std(data)
                 estim = int(numpy.max(data)*nimbins)
                 estim_start = int(numpy.min(data)*nimbins)
-                if estim > 30:
+                if mCnt > 20:
                     #histBins[j] = [int(x) for x in numpy.linspace(estim_start,estim,30)]
-                    histBins[j] = numpy.arange(20)
+                    histBins[j] = numpy.arange(2*int(mCnt))
                 else:
                     histBins[j] = numpy.arange(20)
             print len(histBins[0])
