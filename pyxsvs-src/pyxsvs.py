@@ -130,7 +130,7 @@ class pyxsvs(object):
         self.flatField = fabio.open(self.Parameters['flatFieldFile']).data # Load flat field
         self.constructQVector()
         # Create static
-        currExpParams = self.Parameters['exposureParams'][self.Parameters['exposureList'][0]]
+        currExpParams = self.Parameters['exposureParams'][self.Parameters['exposureList'][-1]]
         dataDir = self.Parameters['dataDir']
         dataSuf = currExpParams['dataSuf']
         n1 = currExpParams['n1']
@@ -319,6 +319,7 @@ class pyxsvs(object):
         self.qVector = numpy.arange(q1,q2+qs,qs)
         self.qVecLen = len(self.qVector)
 
+
     def histogramData(self,fileList,qRings,flatField,bins=numpy.arange(10),img_to_bin=1):
         '''Data reading and processing function. Here's where everything happens.
         By default the data files are histogrammed only after applying the mask.
@@ -465,6 +466,42 @@ class pyxsvs(object):
         saveDir = self.Parameters['saveDir']
         self.mask = maskMaker(self.static,autoMask,saveDir).mask
         pylab.show()
+
+    def correlateData(self):
+        '''Classical correlation function calculator'''
+        dataDir = self.Parameters['dataDir']
+        saveDir = self.Parameters['saveDir']
+        outPrefix = self.Parameters['outPrefix']
+        wavelength = self.Parameters['wavelength']
+        cenx = self.Parameters['cenx']
+        ceny = self.Parameters['ceny']
+        pixSize = self.Parameters['pixSize']
+        sdDist = self.Parameters['sdDist']
+        dq = self.Parameters['dq']
+        exposureList = self.Parameters['exposureList']
+        # Only for the first exposure defined!
+        exposure = exposureList[0]
+        currExpParams = self.Parameters['exposureParams'][exposure]
+        dataSuf = currExpParams['dataSuf']
+        dataPref = currExpParams['dataPref']
+        n1 = currExpParams['n1']
+        n2 = currExpParams['n2']
+        expTime = currExpParams['expTime']
+        expTimeLabel = 't_exp = %.1e s' % expTime
+        fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
+        dim1,dim2 = self.dim1,self.dim2 #shape(fabio.open(fileNames[0]).data) # Get the data dimensions
+        qArray = numpy.ones((dim2,dim1))
+        wf = 4*pi/wavelength
+        [X,Y] = mgrid[1-ceny:dim2+1-ceny,1-cenx:dim1+1-cenx]
+        qArray = wf*sin(arctan(sqrt(X**2+Y**2)*pixSize/sdDist)/2)
+        qArray *= (self.mask+1)%2 # Apply mask
+        qRings = range(self.qVecLen) # Initiate q partition list
+        qImg = numpy.ones((dim1,dim2)) # Image to show q partitions
+        # Populate q partition list
+        for j in xrange(self.qVecLen):
+            qRings[j] = where((qArray >= self.qVector[j] - dq)&(qArray <= self.qVector[j] + dq))
+            qImg[qRings[j]] = 0
+
 
     def calculateVisibility(self):
         r'''Function calculating visibility for each of the exposures
