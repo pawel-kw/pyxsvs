@@ -90,6 +90,8 @@ def main():
     ax.set_ylim(0,dim2)
     ax.set_aspect(1)
     pylab.colorbar(plt)
+    saveFileName = saveDir+outPrefix+'2Dstatic.png'
+    pylab.savefig(saveFileName,dpi=300)
     
     # Azimuthally regoup the static image and plot together with q partitions
     qv = numpy.arange(q1,q2+qs,qs)
@@ -106,6 +108,8 @@ def main():
     pylab.colorbar(pltA)
     ax_azim.set_xlim(numpy.min(q),numpy.max(q))
     ax_azim.set_ylim(numpy.min(chi),numpy.max(chi))
+    saveFileName = saveDir+outPrefix+'azim.png'
+    pylab.savefig(saveFileName,dpi=300)
     
     # 1D integration
     q,staticAzim1d = integrator.integrate1d(data=fastStatic/flatField,\
@@ -122,6 +126,8 @@ def main():
         ymin, ymax = pylab.ylim()
         pylab.fill([qv[i]-dq,qv[i]-dq,qv[i]+dq,qv[i]+dq],[ymin,ymax,ymax,ymin],'b',alpha=.2,edgecolor='r')
         pylab.text(qv[i],0.5*ymax,str(i+1),fontsize=7,horizontalalignment='center')
+    saveFileName = saveDir+outPrefix+'1Dstatic.png'
+    pylab.savefig(saveFileName,dpi=300)
     pylab.show()
 
 if __name__ == '__main__':
