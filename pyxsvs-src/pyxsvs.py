@@ -24,6 +24,17 @@ Classes and functions defined here
     Function returning a list of ID10 style filenames according to the given input
     parameters (prefix, suffix, extension, first and last file number)
 
+Changes
+-------
+
+2014-09-04: Implementing new functionality: partial data set analysis.
+    For some of the data sets taken in XSVS mode the sample suffers from radiation damage
+    already at the beginning of the data acquisition on the new spot. Only 10 to 20 images
+    are useful. I will add new, optional fields in the input file, which will be given as an
+    input to the pyxsvs.pyxsvs.filename() function, to generate a modified list of files for
+    the analysis. Since different number of sample moves was used for different exposures,
+    this needs to be added to each exposure section individually.
+
 Usage example
 -------------
 
@@ -75,6 +86,7 @@ figParams = {
     'legend.handletextpad': 0.1,
     'font.family': 'serif',
     'axes.formatter.limits': (-4,4),
+    'text.usetex': False,
     }
 pylab.rcParams.update(figParams)
 
@@ -136,7 +148,9 @@ class pyxsvs(object):
         n1 = currExpParams['n1']
         n2 = currExpParams['n2']
         dataPref = currExpParams['dataPref']
-        fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
+        stepFiles = currExpParams['stepFiles']
+        usefulFrames = currExpParams['usefulFrames']
+        fileNames = filename(dataDir+dataPref,dataSuf,n1,n2,stepFiles,usefulFrames)# Generate file list
         if len(fileNames) > 200:
             self.static = self.createFastStatic(fileNames[:200])
         else:
@@ -228,6 +242,12 @@ class pyxsvs(object):
                 currExpParams['n1'] = config.getint(exposure,'first data file')
                 currExpParams['n2'] = config.getint(exposure,'last data file')
                 currExpParams['expTime'] = config.getfloat(exposure,'exp time')
+                try:
+                    currExpParams['stepFiles'] = config.getint(exposure,'files in step')
+                    currExpParams['usefulFrames'] = config.getint(exposure,'useful frames')
+                except:
+                    currExpParams['stepFiles'] = -1
+                    currExpParams['usefulFrames'] = -1
                 self.Parameters['exposureParams'][exposure] = currExpParams
                 self.Results[exposure] = {} # Initialize Results container
                 self.Results[exposure]['expTime'] = currExpParams['expTime']
@@ -468,7 +488,9 @@ class pyxsvs(object):
         pylab.show()
 
     def correlateData(self):
-        '''Classical correlation function calculator'''
+        '''Classical correlation function calculator
+        NOT IMPLEMENTED YET!!!
+        '''
         dataDir = self.Parameters['dataDir']
         saveDir = self.Parameters['saveDir']
         outPrefix = self.Parameters['outPrefix']
@@ -532,7 +554,9 @@ class pyxsvs(object):
             n2 = currExpParams['n2']
             expTime = currExpParams['expTime']
             expTimeLabel = 't_exp = %.1e s' % expTime
-            fileNames = filename(dataDir+dataPref,dataSuf,n1,n2) # Generate file list
+            stepFiles = currExpParams['stepFiles']
+            usefulFrames = currExpParams['usefulFrames']
+            fileNames = filename(dataDir+dataPref,dataSuf,n1,n2,stepFiles,usefulFrames) # Generate file list
             dim1,dim2 = self.dim1,self.dim2 #shape(fabio.open(fileNames[0]).data) # Get the data dimensions
             qArray = numpy.ones((dim2,dim1))
             wf = 4*pi/wavelength
@@ -559,8 +583,8 @@ class pyxsvs(object):
             ax1.pcolormesh(X,Y,qImg,alpha=0.5,cmap=pylab.cm.gray)
             #ax1.set_xlim(numpy.min(X),numpy.max(X))
             #ax1.set_ylim(numpy.min(Y),numpy.max(Y))
-            ax1.set_xlim(-100,100)
-            ax1.set_ylim(-100,100)
+            ax1.set_xlim(-150,150)
+            ax1.set_ylim(-150,150)
             pylab.savefig(saveDir+outPrefix+dataPref+exposure+'_q_mask.png',dpi=200)
             pylab.close(figQ)
             ###################
@@ -914,16 +938,30 @@ class maskMaker:
 # Helper function definitions #
 ###############################
 
-def filename(pref,suf,firstf,lastf):
+def filename(pref,suf,firstf,lastf,stepFiles=-1,usefulFrames=-1):
     '''Function creating file name list
+
+    **Input parameters**
+
+    :py:attr: pref: string,
+                file prefix
+    :py:attr: suf: string,
+                file suffix
+    :py:attr: firstf: int,
+                first file number
+    :py:attr: lastf: int,
+                last file number
+    :py:attr: stepFiles: int,
+                number of data files acquired on a single spot. Not used if set to -1
+    :py:attr: usefulFrames: int,
+                number of useful frames on a single spot. Not used if set to -1
     '''
-    numb=range(firstf,lastf+1)
-    fname=numb
-    for i in range(len(numb)):
-        if numb[i] < 10000:
-            fname[i]=pref+string.zfill(str(numb[i]),4)+suf
-        else:
-            fname[i]=pref+str(numb[i])+suf
+    if (stepFiles > 0) & (usefulFrames > 0):
+        fileInd = [range(i,i+usefulFrames) for i in range(firstf,lastf,stepFiles)]
+        fileInd = [item for sublist in fileInd for item in sublist]
+        fname = [pref + '%04d' % i + suf for i in fileInd]
+    else:
+        fname = [pref + '%04d' % i + suf for i in range(firstf,lastf+1)]
     return fname
 
 def nbinomPMF(x,K,M):
