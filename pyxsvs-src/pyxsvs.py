@@ -459,7 +459,7 @@ class pyxsvs(object):
            except ValueError:
                print 'Problems reading file %s' % fileName
                sys.exit()
-           res += data
+           res += data/self.flatField
            del data
         staticFile = res/len(fileList)
         if qRings != 0:
