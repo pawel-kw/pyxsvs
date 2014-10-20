@@ -2,29 +2,73 @@
 save dir = ./
 data dir = ../../data/xsvs-series/
 flat field = ../maxipix1_flatfield_2013.edf
+mask = ../mask.edf
 default mask = ../maxipix1_mask_2013.edf
-q1 = 0.010
+q1 = 0.002
 qs = 0.001
-q2 = 0.013
+q2 = 0.010
 dq = 4e-04
-sample name = SiD_1-0_XSVS_
+sample name = SiD_1-1_40C_
 wavelength = 1.53
-cenx = 125
-ceny = 118
+cenx = 125.01
+ceny = 118.31
 pix = 0.055
 sddist = 2140
-figure title = SiD_1-0 40 degC
+figure title = SiD_1-1 40 degC
 
 [Exp_1]
-data prefix = sid1-0_40C_att0_
+data prefix = sid1-1_40C_
 data suffix = .edf.gz
 first data file = 1
 last data file = 360
 exp time = 5e-5
 
 [Exp_2]
-data prefix = sid1-0_40C_att0_
+data prefix = sid1-1_40C_
 data suffix = .edf.gz
 first data file = 361
 last data file = 720
 exp time = 1e-4
+
+[Exp_3]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 721
+last data file = 1080
+exp time = 2e-4
+
+[Exp_4]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 1081
+last data file = 1440
+exp time = 4e-4
+
+[Exp_5]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 1441
+last data file = 1800
+exp time = 8e-4
+
+[Exp_6]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 1801
+last data file = 2160
+exp time = 1.6e-3
+
+[Exp_7]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 2161
+last data file = 2520
+exp time = 3.2e-3
+
+[Exp_8]
+data prefix = sid1-1_40C_
+data suffix = .edf.gz
+first data file = 2521
+last data file = 2700
+exp time = 6.4e-3
+
