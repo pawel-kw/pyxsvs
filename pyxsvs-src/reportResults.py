@@ -14,15 +14,8 @@ import pickle
 import argparse
 import os
 import time
-
-#from PIL import Image
 from reportlab.platypus.flowables import Image, ParagraphAndImage
 from glob import glob
-
-from pdfrw import PdfReader
-from pdfrw.buildxobj import pagexobj
-from pdfrw.toreportlab import makerl
-
 from reportlab.platypus import Flowable
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
