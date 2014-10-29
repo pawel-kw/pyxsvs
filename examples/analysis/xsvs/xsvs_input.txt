@@ -2,8 +2,8 @@
 save dir = ./
 data dir = ../../data/xsvs-series/
 flat field = ../maxipix1_flatfield_2013.edf
-mask = ../mask.edf
 default mask = ../maxipix1_mask_2013.edf
+mask = ../mask.edf
 q1 = 0.002
 qs = 0.001
 q2 = 0.010
