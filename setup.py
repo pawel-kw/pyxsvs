@@ -24,6 +24,7 @@ setup(name='pyxsvs',
               'pyxsvs = pyxsvs.pyxsvs:main',
               'makemask = pyxsvs.makemask:main',
               'createStatic = pyxsvs.createStatic:main'
+              'reportResults = pyxsvs.reportResults:main'
               ]
           },
        package_data = {
