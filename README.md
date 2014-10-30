@@ -53,4 +53,4 @@ If ReportLab is installed on your system, you can then run
 
     reportResults -i ./xsvs_input.txt
 
-to see a nice PDF report containing all the produced figures with some basic description.
+to see a nice PDF report containing all the produced figures with some basic description. The 'clear_results.sh' script deletes all the produced output files.
