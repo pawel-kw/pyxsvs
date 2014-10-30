@@ -23,7 +23,7 @@ setup(name='pyxsvs',
           'console_scripts': [
               'pyxsvs = pyxsvs.pyxsvs:main',
               'makemask = pyxsvs.makemask:main',
-              'createStatic = pyxsvs.createStatic:main'
+              'createStatic = pyxsvs.createStatic:main',
               'reportResults = pyxsvs.reportResults:main'
               ]
           },
