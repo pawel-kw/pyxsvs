@@ -1073,7 +1073,7 @@ def resid_db(params,img,mask,dchi,pix_size,wavelength,dist,rmin,rmax,directions)
     for i in xrange(len(azimuth_range_set)):
         azimuth_range = azimuth_range_set[i]
         q,I = integrator.integrate1d(data = img,mask=mask,
-                nbPt = nbPt,
+                npt = nbPt,
                 method = 'BBox',
                 azimuth_range = azimuth_range)
         I_a.append(numpy.log10(I[rmin:rmax]))
